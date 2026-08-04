@@ -9,6 +9,7 @@
     "lint": "eslint"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.21.0",
     "@hookform/resolvers": "^5.7.1",
     "@prisma/client": "^5.22.0",
     "bcryptjs": "^3.0.3",
@@ -25,21 +26,27 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "react-hook-form": "^7.84.0",
-    "@google/generative-ai": "^0.21.0",
     "xlsx": "^0.18.5",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
+    "@testing-library/jest-dom": "^7.0.0",
+    "@testing-library/react": "^16.3.2",
     "@types/bcryptjs": "^2.4.6",
     "@types/node": "^20.19.43",
     "@types/pdf-parse": "^1.1.5",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
+    "@types/react-test-renderer": "^19.1.0",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.0",
+    "jsdom": "^30.0.1",
+    "playwright": "^1.62.1",
     "prisma": "^5.22.0",
     "tailwindcss": "^4.3.3",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.10"
   }
 }

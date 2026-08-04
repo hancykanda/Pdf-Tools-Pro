@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { FileStack, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import {
   ToolPageShell,
   ToolCard,
@@ -13,6 +14,14 @@ import {
 } from '@/components/layout/ToolPageShell';
 
 export default function MergePage() {
+  return (
+    <ErrorBoundary>
+      <MergePageContent />
+    </ErrorBoundary>
+  );
+}
+
+function MergePageContent() {
   const [files, setFiles] = useState<File[]>([]);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
