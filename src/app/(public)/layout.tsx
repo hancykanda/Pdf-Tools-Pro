@@ -101,8 +101,8 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
   return (
     <div className="min-h-screen flex flex-col bg-[#F8F9FA] text-brand-dark">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between relative">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5 group">
             <div className="flex items-center justify-center w-8 h-8 bg-brand-red text-white rounded-lg shadow-sm group-hover:bg-red-700 group-hover:scale-105 transition-all">
@@ -149,7 +149,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             ) : (
               <button
                 onClick={() => setSearchOpen(true)}
-                className="p-2 text-gray-600 hover:text-brand-red bg-gray-50 hover:bg-gray-100 border border-gray-200/60 rounded-full transition-all flex items-center gap-1.5 text-xs font-semibold"
+                className="p-2 text-gray-600 hover:text-brand-red bg-gray-50 hover:bg-gray-100 border border-gray-200/60 rounded-full transition-all flex items-center gap-1.5 text-xs font-semibold pointer-events-auto"
                 title="Search PDF tools"
               >
                 <Search className="w-4 h-4 text-gray-600" />
@@ -160,7 +160,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
             {/* Mobile Hamburger */}
             <button
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-              className="lg:hidden p-2 text-gray-500 hover:text-brand-red bg-gray-50 hover:bg-gray-100 border border-gray-200/50 rounded-xl transition-all"
+              className="lg:hidden p-2 text-gray-500 hover:text-brand-red bg-gray-50 hover:bg-gray-100 border border-gray-200/50 rounded-xl transition-all pointer-events-auto"
               aria-label="Toggle navigation menu"
             >
               {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
@@ -170,51 +170,57 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
 
         {/* Mobile Navigation Drawer */}
         {mobileMenuOpen && (
-          <div className="lg:hidden bg-white border-t border-gray-100 px-6 py-6 space-y-4 max-h-[85vh] overflow-y-auto">
-            <div className="flex flex-col space-y-2">
-              <Link
-                href="/tools"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-left transition-colors group"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <FileStack className="w-4 h-4 text-gray-400 group-hover:text-brand-red transition-colors" />
-                <span className="text-xs font-bold text-gray-700 group-hover:text-brand-red transition-colors">Tools</span>
-              </Link>
-              <Link
-                href="/pricing"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-left transition-colors group"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Sparkles className="w-4 h-4 text-gray-400 group-hover:text-brand-red transition-colors" />
-                <span className="text-xs font-bold text-gray-700 group-hover:text-brand-red transition-colors">Pricing</span>
-              </Link>
-              <Link
-                href="/about"
-                className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-left transition-colors group"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                <Info className="w-4 h-4 text-gray-400 group-hover:text-brand-red transition-colors" />
-                <span className="text-xs font-bold text-gray-700 group-hover:text-brand-red transition-colors">About</span>
-              </Link>
-            </div>
+          <>
+            <div
+              className="fixed inset-0 bg-black/20 backdrop-blur-sm z-40 lg:hidden"
+              onClick={() => setMobileMenuOpen(false)}
+            />
+            <div className="lg:hidden absolute top-full left-0 right-0 bg-white border-b border-gray-100 px-6 py-6 space-y-4 max-h-[85vh] overflow-y-auto z-50">
+              <div className="flex flex-col space-y-2">
+                <Link
+                  href="/tools"
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-left transition-colors group"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <FileStack className="w-4 h-4 text-gray-400 group-hover:text-brand-red transition-colors" />
+                  <span className="text-xs font-bold text-gray-700 group-hover:text-brand-red transition-colors">Tools</span>
+                </Link>
+                <Link
+                  href="/pricing"
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-left transition-colors group"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Sparkles className="w-4 h-4 text-gray-400 group-hover:text-brand-red transition-colors" />
+                  <span className="text-xs font-bold text-gray-700 group-hover:text-brand-red transition-colors">Pricing</span>
+                </Link>
+                <Link
+                  href="/about"
+                  className="w-full flex items-center gap-3 px-3 py-2 rounded-xl hover:bg-gray-50 text-left transition-colors group"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  <Info className="w-4 h-4 text-gray-400 group-hover:text-brand-red transition-colors" />
+                  <span className="text-xs font-bold text-gray-700 group-hover:text-brand-red transition-colors">About</span>
+                </Link>
+              </div>
 
-            <div className="pt-4 border-t border-gray-100 space-y-2">
-              <Link
-                href="/auth/signin"
-                className="block w-full text-center px-4 py-2.5 text-gray-700 font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/auth/register"
-                className="block w-full text-center px-4 py-2.5 bg-brand-red text-white font-semibold rounded-xl hover:bg-red-700 transition-colors"
-                onClick={() => setMobileMenuOpen(false)}
-              >
-                Get Started Free
-              </Link>
+              <div className="pt-4 border-t border-gray-100 space-y-2">
+                <Link
+                  href="/auth/signin"
+                  className="block w-full text-center px-4 py-2.5 text-gray-700 font-medium border border-gray-200 rounded-xl hover:bg-gray-50 transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Sign In
+                </Link>
+                <Link
+                  href="/auth/register"
+                  className="block w-full text-center px-4 py-2.5 bg-brand-red text-white font-semibold rounded-xl hover:bg-red-700 transition-colors"
+                  onClick={() => setMobileMenuOpen(false)}
+                >
+                  Get Started Free
+                </Link>
+              </div>
             </div>
-          </div>
+          </>
         )}
       </header>
 
