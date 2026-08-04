@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from 'next';
-import { Inter, Bree_Serif, Quintessential } from 'next/font/google';
+import { Inter } from 'next/font/google';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -26,27 +26,13 @@ const inter = Inter({
   display: 'swap',
 });
 
-const bree = Bree_Serif({
-  subsets: ['latin'],
-  weight: '400',
-  variable: '--font-bree',
-  display: 'swap',
-});
-
-const quintessential = Quintessential({
-  subsets: ['latin'],
-  weight: '400',
-  variable: '--font-quintessential',
-  display: 'swap',
-});
-
 export default function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${bree.variable} ${quintessential.variable}`}>
+    <html lang="en" className={`${inter.variable}`}>
       <body className="min-h-screen bg-[#F8F9FA] text-brand-dark antialiased">
         {children}
       </body>
