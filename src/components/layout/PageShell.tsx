@@ -1,4 +1,5 @@
 import { ReactNode } from 'react';
+import Link from 'next/link';
 
 export function PageContainer({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 ${className}`}>{children}</div>;
@@ -71,6 +72,7 @@ export function ActionButton({
   loading,
   variant = 'primary',
   className = '',
+  type = 'button',
 }: {
   children: React.ReactNode;
   onClick?: () => void;
@@ -78,6 +80,7 @@ export function ActionButton({
   loading?: boolean;
   variant?: 'primary' | 'secondary';
   className?: string;
+  type?: 'button' | 'submit';
 }) {
   const base =
     'w-full flex items-center justify-center gap-2 px-4 py-3 font-semibold rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
@@ -87,7 +90,7 @@ export function ActionButton({
       : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50';
 
   return (
-    <button onClick={onClick} disabled={disabled || loading} className={`${base} ${styles} ${className}`}>
+    <button type={type} onClick={onClick} disabled={disabled || loading} className={`${base} ${styles} ${className}`}>
       {loading && <span className="animate-spin">⟳</span>}
       {children}
     </button>
@@ -105,4 +108,36 @@ export function Alert({ type = 'error', children }: { type?: 'error' | 'success'
 
 export function Card({ children, className = '' }: { children: ReactNode; className?: string }) {
   return <div className={`bg-white rounded-2xl border border-gray-100 shadow-sm p-6 ${className}`}>{children}</div>;
+}
+
+export function AuthLayout({ children, title, subtitle, href, linkText }: { children: ReactNode; title: string; subtitle?: string; href?: string; linkText?: string }) {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+      <div className="max-w-md w-full space-y-8">
+        <div className="text-center">
+          <Link href="/" className="inline-flex items-center gap-2 mb-6">
+            <div className="flex items-center justify-center w-10 h-10 bg-brand-red text-white rounded-xl shadow-lg">
+              <span className="font-quintessential font-bold text-sm">PDF</span>
+            </div>
+            <span className="font-bree text-xl tracking-tight text-gray-900">
+              PDF<span className="font-quintessential font-bold text-brand-red ml-1">Master</span>
+            </span>
+          </Link>
+          <h2 className="font-display font-bold text-3xl text-gray-900">{title}</h2>
+          {subtitle && (
+            <p className="mt-2 text-sm text-gray-600">
+              {subtitle}{' '}
+              {href && linkText && (
+                <Link href={href} className="font-medium text-brand-red hover:text-red-700">
+                  {linkText}
+                </Link>
+              )}
+            </p>
+          )}
+        </div>
+
+        <Card className="mt-8">{children}</Card>
+      </div>
+    </div>
+  );
 }
