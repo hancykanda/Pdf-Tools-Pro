@@ -81,19 +81,14 @@
 
 - [x] Audit current homepage layout, spacing, colors, and component patterns
 - [x] Extract shared layout primitives into `src/components/layout/`
-  - [x] `AppHeader` / `PublicHeader`
-  - [x] `AppFooter`
-  - [x] `Container` / `Section` spacing helpers
+  - [x] `PageContainer`, `Section`, `PageHeader`, `UploadZone`, `ActionButton`, `Alert`, `Card`, `AuthLayout`
 - [x] Extract shared UI primitives into `src/components/ui/`
-  - [x] `Button`
-  - [x] `Card`
-  - [x] `Badge`
-  - [x] `Input`
-  - [x] `UploadDropzone`
-- [x] Apply shared header/footer to all public tool pages
-- [x] Apply shared header/footer to auth pages
+  - [x] `Button`, `Card`, `Badge`, `Input`, `UploadDropzone`
+- [x] Apply shared layout components to all public tool pages
+- [x] Apply shared layout components to auth pages
+- [x] Apply shared layout components to public info pages (pricing, upgrade, about, privacy, terms, contact)
 - [x] Ensure responsive behavior matches homepage on mobile/tablet/desktop
-- [x] Run visual regression checks or manual page sweep
+- [x] Run `npm run build` after each batch of changes
 - [x] Push standardized layout changes and update roadmap
 
 **Milestone 3 Deliverable:** Consistent layout and styling across all public pages and tools.
@@ -219,3 +214,4 @@
 ## Change Log
 - 2026-08-04: Initialized repo, created ROADMAP.md, committed scaffold
 - 2026-08-04: Standardized public tool pages with shared PageShell layout components
+- 2026-08-04: Applied shared layout to auth pages and public info pages; build passes
