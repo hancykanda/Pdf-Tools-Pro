@@ -138,7 +138,7 @@ export default function PdfToJpgPage() {
                 <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
               </div>
 
-              <ToolPrimaryButton onClick={handleConvert} loading={isProcessing}>
+              <ToolPrimaryButton onClick={handleConvert} loading={isProcessing} disabled={!file}>
                 {isProcessing ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />

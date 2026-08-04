@@ -101,6 +101,14 @@ export function ToolUploadZone({
         onFiles(e.dataTransfer.files);
       }}
       onDragOver={(e) => e.preventDefault()}
+      onDragEnter={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+      onDragLeave={(e) => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
       className="border-2 border-dashed border-gray-200 rounded-3xl p-8 sm:p-12 text-center hover:border-brand-red transition-colors cursor-pointer"
       onClick={() => inputRef.current?.click()}
     >
@@ -109,7 +117,7 @@ export function ToolUploadZone({
         type="file"
         accept={accept}
         multiple={multiple}
-        className="hidden"
+        className="absolute w-px h-px overflow-hidden opacity-0"
         onChange={(e) => onFiles(e.target.files)}
       />
       <div className="p-4 bg-red-50 text-brand-red rounded-2xl w-fit mx-auto mb-4">
@@ -134,16 +142,18 @@ export function ToolPrimaryButton({
   loading?: boolean;
   className?: string;
 }) {
+  const isDisabled = disabled || loading;
+
   return (
     <button
       onClick={onClick}
-      disabled={disabled || loading}
-      className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-brand-red text-white disabled:opacity-40 disabled:hover:bg-brand-red hover:bg-red-700 font-semibold rounded-2xl cursor-pointer transition-all shadow-lg shadow-red-500/10 text-xs uppercase tracking-wider ${className}`}
+      disabled={isDisabled}
+      className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-brand-red text-white disabled:opacity-40 disabled:hover:bg-brand-red hover:bg-red-700 font-semibold rounded-2xl cursor-pointer transition-all shadow-lg shadow-red-500/10 text-xs uppercase tracking-wider disabled:cursor-not-allowed ${className}`}
     >
       {loading && (
         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
       )}
-      {children}
+      {!loading && children}
     </button>
   );
 }
@@ -151,16 +161,19 @@ export function ToolPrimaryButton({
 export function ToolSecondaryButton({
   children,
   onClick,
+  disabled,
   className = '',
 }: {
   children: ReactNode;
   onClick?: () => void;
+  disabled?: boolean;
   className?: string;
 }) {
   return (
     <button
       onClick={onClick}
-      className={`flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-700 hover:bg-gray-50 font-semibold rounded-2xl border border-gray-200 cursor-pointer transition-all ${className}`}
+      disabled={disabled}
+      className={`flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-700 hover:bg-gray-50 font-semibold rounded-2xl border border-gray-200 cursor-pointer transition-all disabled:opacity-40 disabled:cursor-not-allowed ${className}`}
     >
       {children}
     </button>
