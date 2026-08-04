@@ -2,6 +2,7 @@
 
 import { useState, useRef, useEffect } from 'react';
 import { FileImage, Upload, Download, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
+import { PageContainer, Section, PageHeader, UploadZone, ActionButton, Alert, Card } from '@/components/layout/PageShell';
 
 export default function PdfToJpgPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -9,7 +10,6 @@ export default function PdfToJpgPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -92,100 +92,71 @@ export default function PdfToJpgPage() {
   };
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-      <div className="flex items-center gap-3 mb-8">
-        <div className="w-10 h-10 bg-brand-red text-white flex items-center justify-center rounded-xl shadow-lg shadow-red-500/10">
-          <FileImage className="w-5 h-5" />
-        </div>
-        <div>
-          <h1 className="font-display font-bold text-2xl text-brand-dark">PDF to JPG</h1>
-          <p className="text-gray-500 text-sm">Convert PDF pages to JPG images.</p>
-        </div>
-      </div>
+    <PageContainer>
+      <Section>
+        <PageHeader title="PDF to JPG" description="Convert PDF pages to JPG images." icon={FileImage} />
 
-      <div
-        onDrop={handleDrop}
-        onDragOver={(e) => e.preventDefault()}
-        className="border-2 border-dashed border-gray-200 rounded-2xl p-8 text-center hover:border-brand-red transition-colors cursor-pointer mb-6"
-        onClick={() => fileInputRef.current?.click()}
-      >
-        <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-        <p className="text-gray-700 font-medium mb-1">Click to upload or drag and drop a PDF file</p>
-        <p className="text-gray-400 text-sm">Each page will be converted to a JPG image</p>
-        <input
-          ref={fileInputRef}
-          type="file"
+        <UploadZone
+          icon={Upload}
+          title="Click to upload or drag and drop a PDF file"
+          subtitle="Each page will be converted to a JPG image"
           accept="application/pdf"
-          className="hidden"
-          onChange={(e) => handleFile(e.target.files?.[0] || null)}
+          onFiles={(files) => handleFile(files?.[0] || null)}
         />
-      </div>
 
-      {file && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6 mb-6">
-          <h3 className="font-display font-semibold text-brand-dark mb-4">Selected File</h3>
-          <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
-            <span className="text-sm font-medium text-gray-700">{file.name}</span>
-            <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
-          </div>
+        {file && (
+          <Card className="mb-6">
+            <h3 className="font-display font-semibold text-brand-dark mb-4">Selected File</h3>
+            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl mb-4">
+              <span className="text-sm font-medium text-gray-700">{file.name}</span>
+              <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+            </div>
 
-          <button
-            onClick={handleConvert}
-            disabled={isProcessing}
-            className="mt-4 w-full flex items-center justify-center gap-2 px-4 py-3 bg-brand-red text-white font-semibold rounded-xl hover:bg-red-700 transition-colors shadow-lg shadow-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
-          >
-            {isProcessing ? (
-              <>
-                <RefreshCw className="w-5 h-5 animate-spin" />
-                Converting...
-              </>
-            ) : (
-              <>
-                <Download className="w-5 h-5" />
-                Convert to Images
-              </>
-            )}
-          </button>
-        </div>
-      )}
+            <ActionButton onClick={handleConvert} loading={isProcessing}>
+              <Download className="w-5 h-5" />
+              Convert to Images
+            </ActionButton>
+          </Card>
+        )}
 
-      {error && (
-        <div className="flex items-center gap-2 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm mb-6">
-          <AlertCircle className="w-4 h-4" />
-          {error}
-        </div>
-      )}
+        {error && (
+          <Alert type="error">
+            <AlertCircle className="w-4 h-4" />
+            {error}
+          </Alert>
+        )}
 
-      {success && (
-        <div className="flex items-center gap-2 bg-green-50 text-green-700 px-4 py-3 rounded-xl text-sm mb-6">
-          <CheckCircle2 className="w-4 h-4" />
-          Converted {images.length} page(s) to images.
-        </div>
-      )}
+        {success && (
+          <Alert type="success">
+            <CheckCircle2 className="w-4 h-4" />
+            Converted {images.length} page(s) to images.
+          </Alert>
+        )}
 
-      {images.length > 0 && (
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-6">
-          <h3 className="font-display font-semibold text-brand-dark mb-4">Converted Images</h3>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-            {images.map((src, index) => (
-              <div key={index} className="relative">
-                <img
-                  src={src}
-                  alt={`Page ${index + 1}`}
-                  className="w-full h-40 object-cover rounded-xl border border-gray-100"
-                />
-                <a
-                  href={src}
-                  download={`page-${index + 1}.jpg`}
-                  className="absolute inset-0 flex items-center justify-center bg-black/40 text-white font-medium opacity-0 hover:opacity-100 transition-opacity rounded-xl"
-                >
-                  Download
-                </a>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
+        {images.length > 0 && (
+          <Card>
+            <h3 className="font-display font-semibold text-brand-dark mb-4">Converted Images</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {images.map((src, index) => (
+                <div key={index} className="relative">
+                  <img
+                    src={src}
+                    alt={`Page ${index + 1}`}
+                    className="w-full h-40 object-cover rounded-xl border border-gray-100"
+                  />
+                  <a
+                    href={src}
+                    download={`page-${index + 1}.jpg`}
+                    className="absolute inset-0 flex items-center justify-center bg-black/40 text-white font-medium opacity-0 hover:opacity-100 transition-opacity rounded-xl"
+                  >
+                    Download
+                  </a>
+                </div>
+              ))}
+            </div>
+          </Card>
+        )}
+      </Section>
+    </PageContainer>
   );
 }
