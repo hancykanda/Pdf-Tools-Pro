@@ -98,20 +98,20 @@
 ## Phase 4: Premium Dashboard Shell
 **Goal:** Complete the authenticated teacher workspace shell and prepare it for premium features.
 
-- [ ] Finalize dashboard sidebar navigation with active states
-- [ ] Add dashboard header with user menu and premium badge
-- [ ] Create premium placeholders for:
-  - `/dashboard/ai-editor`
-  - `/dashboard/exam-header`
-  - `/dashboard/ocr-organize`
-  - `/dashboard/questions`
-  - `/dashboard/papers`
-  - `/dashboard/exam-generator`
-  - `/dashboard/lesson-plans`
-  - `/dashboard/settings`
-- [ ] Verify proxy redirects unauthenticated users to `/auth/signin`
-- [ ] Verify proxy redirects non-premium users to `/upgrade`
-- [ ] Push dashboard shell changes and update roadmap
+- [x] Finalize dashboard sidebar navigation with active states
+- [x] Add dashboard header with user menu and premium badge
+- [x] Create premium placeholders for:
+  - [x] `/dashboard/ai-editor`
+  - [x] `/dashboard/exam-header`
+  - [x] `/dashboard/ocr-organize`
+  - [x] `/dashboard/questions`
+  - [x] `/dashboard/papers`
+  - [x] `/dashboard/exam-generator`
+  - [x] `/dashboard/lesson-plans`
+  - [x] `/dashboard/settings`
+- [x] Verify proxy redirects unauthenticated users to `/auth/signin`
+- [x] Verify proxy redirects non-premium users to `/upgrade`
+- [x] Push dashboard shell changes and update roadmap
 
 **Milestone 4 Deliverable:** Fully navigable premium dashboard shell with auth gating enforced.
 
@@ -215,3 +215,4 @@
 - 2026-08-04: Initialized repo, created ROADMAP.md, committed scaffold
 - 2026-08-04: Standardized public tool pages with shared PageShell layout components
 - 2026-08-04: Applied shared layout to auth pages and public info pages; build passes
+- 2026-08-04: Added premium dashboard shell with placeholder pages and premium API route stubs
