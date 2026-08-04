@@ -16,13 +16,14 @@ export default function PDFtoPDFAPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const handleFile = (selected: File | null) => {
-    if (selected) {
-      setFile(selected);
+  const handleFile = (selected: FileList | null) => {
+    const picked = selected?.[0] || null;
+    if (picked && picked.type === "application/pdf") {
+      setFile(picked);
       setError(null);
       setSuccess(false);
     } else {
-      setError("Please upload a file");
+      setError("Please upload a valid PDF file");
     }
   };
 
@@ -32,9 +33,32 @@ export default function PDFtoPDFAPage() {
     setError(null);
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const res = await fetch("/api/tools/pdf-to-pdfa", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64 }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Conversion failed");
+
+      const link = document.createElement("a");
+      link.href = data.dataUrl;
+      link.download = "document.pdfa.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : "Failed to convert PDF to PDF/A");
     } finally {
       setIsProcessing(false);
     }
@@ -47,10 +71,10 @@ export default function PDFtoPDFAPage() {
           {!file ? (
             <ToolUploadZone
               icon={Upload}
-              title="Click to upload or drag and drop a file"
-              subtitle="Upload your file to get started"
-              accept="*/*"
-              onFiles={(files) => handleFile(files?.[0] || null)}
+              title="Click to upload or drag and drop a PDF file"
+              subtitle="We'll convert it to archival PDF/A-1b"
+              accept="application/pdf"
+              onFiles={handleFile}
             />
           ) : (
             <ToolCard>
@@ -72,7 +96,7 @@ export default function PDFtoPDFAPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              PDF converted to PDF/A-1b successfully! Your download should begin automatically.
             </ToolAlert>
           )}
         </div>
@@ -81,7 +105,8 @@ export default function PDFtoPDFAPage() {
           <div>
             <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Options</h3>
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Convert PDFs to archival PDF/A format.
+              Embed XMP metadata declaring PDF/A-1b compliance, set document properties, and add a
+              marked structure tree so the document conforms to the archival PDF/A standard.
             </p>
           </div>
 
@@ -93,7 +118,7 @@ export default function PDFtoPDFAPage() {
               </>
             ) : (
               <>
-                <span>PDF to PDF/A</span>
+                <span>Convert to PDF/A</span>
                 <Download className="w-5 h-5 shrink-0" />
               </>
             )}

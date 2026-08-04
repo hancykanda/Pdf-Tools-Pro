@@ -12,6 +12,7 @@ import {
 
 export default function UnlockPDFPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [password, setPassword] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -27,12 +28,35 @@ export default function UnlockPDFPage() {
   };
 
   const handleProcess = async () => {
-    if (!file) return;
+    if (!file || !password) return;
     setIsProcessing(true);
     setError(null);
 
     try {
-      setSuccess(true);
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const res = await fetch("/api/tools/unlock-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file: base64, password }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Unlock failed");
+
+        const link = document.createElement("a");
+        link.href = data.dataUrl;
+        link.download = data.filename || "unlocked.pdf";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setSuccess(true);
+      };
+      reader.onerror = () => {
+        setError("Failed to read file");
+        setIsProcessing(false);
+      };
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Operation failed");
     } finally {
@@ -83,9 +107,21 @@ export default function UnlockPDFPage() {
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
               Remove password protection from PDF files.
             </p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Current Password</label>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
+                  placeholder="Enter current password"
+                />
+              </div>
+            </div>
           </div>
 
-          <ToolPrimaryButton onClick={handleProcess} disabled={!file} loading={isProcessing}>
+          <ToolPrimaryButton onClick={handleProcess} disabled={!file || !password} loading={isProcessing}>
             {isProcessing ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />

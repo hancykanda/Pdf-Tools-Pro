@@ -12,6 +12,10 @@ import {
 
 export default function EditPDFPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [overlayText, setOverlayText] = useState("Sample Text");
+  const [posX, setPosX] = useState(50);
+  const [posY, setPosY] = useState(50);
+  const [fontSize, setFontSize] = useState(24);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -32,9 +36,32 @@ export default function EditPDFPage() {
     setError(null);
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const res = await fetch("/api/tools/edit-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64, text: overlayText, x: posX, y: posY, fontSize }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Editing failed");
+
+      const link = document.createElement("a");
+      link.href = data.dataUrl;
+      link.download = "edited.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : "Failed to edit PDF");
     } finally {
       setIsProcessing(false);
     }
@@ -49,7 +76,7 @@ export default function EditPDFPage() {
               icon={Upload}
               title="Click to upload or drag and drop a file"
               subtitle="Upload your file to get started"
-              accept="*/*"
+              accept="application/pdf"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -72,7 +99,7 @@ export default function EditPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              PDF edited successfully! Your download should begin automatically.
             </ToolAlert>
           )}
         </div>
@@ -83,6 +110,53 @@ export default function EditPDFPage() {
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
               Add text, images, and shapes to PDF documents.
             </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Overlay Text</label>
+                <input
+                  type="text"
+                  value={overlayText}
+                  onChange={(e) => setOverlayText(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                  placeholder="Sample Text"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">X Position</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={posX}
+                    onChange={(e) => setPosX(Number(e.target.value))}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">Y Position</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={posY}
+                    onChange={(e) => setPosY(Number(e.target.value))}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Font Size</label>
+                <input
+                  type="number"
+                  min="8"
+                  value={fontSize}
+                  onChange={(e) => setFontSize(Number(e.target.value))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                />
+              </div>
+            </div>
           </div>
 
           <ToolPrimaryButton onClick={handleProcess} disabled={!file} loading={isProcessing}>

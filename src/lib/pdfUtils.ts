@@ -71,6 +71,15 @@ export async function imagesToPDF(imagesBase64: string[], options: { margin: 'no
   return await doc.save();
 }
 
+export function base64ToBytes(base64: string): Uint8Array {
+  const cleanBase64 = base64.split(',')[1] || base64;
+  return Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
+}
+
+export function bytesToBase64(bytes: Uint8Array, mimeType = 'application/pdf'): string {
+  return `data:${mimeType};base64,${Buffer.from(bytes).toString('base64')}`;
+}
+
 export function toDataUrl(bytes: Uint8Array, mimeType = 'application/pdf') {
   const blob = new Blob([Buffer.from(bytes)], { type: mimeType });
   return URL.createObjectURL(blob);

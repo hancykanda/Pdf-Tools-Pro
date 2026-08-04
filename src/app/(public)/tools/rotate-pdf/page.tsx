@@ -12,6 +12,7 @@ import {
 
 export default function RotatePDFPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [rotation, setRotation] = useState(90);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -32,9 +33,32 @@ export default function RotatePDFPage() {
     setError(null);
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const res = await fetch("/api/tools/rotate-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64, rotation }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Rotation failed");
+
+      const link = document.createElement("a");
+      link.href = data.dataUrl;
+      link.download = "rotated.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : "Failed to rotate PDF");
     } finally {
       setIsProcessing(false);
     }
@@ -49,7 +73,7 @@ export default function RotatePDFPage() {
               icon={Upload}
               title="Click to upload or drag and drop a file"
               subtitle="Upload your file to get started"
-              accept="*/*"
+              accept="application/pdf"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -72,7 +96,7 @@ export default function RotatePDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              PDF rotated successfully! Your download should begin automatically.
             </ToolAlert>
           )}
         </div>
@@ -83,6 +107,21 @@ export default function RotatePDFPage() {
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
               Rotate PDF pages to the correct orientation.
             </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Rotation Angle</label>
+                <select
+                  value={rotation}
+                  onChange={(e) => setRotation(Number(e.target.value))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                >
+                  <option value={90}>90 degrees</option>
+                  <option value={180}>180 degrees</option>
+                  <option value={270}>270 degrees</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <ToolPrimaryButton onClick={handleProcess} disabled={!file} loading={isProcessing}>

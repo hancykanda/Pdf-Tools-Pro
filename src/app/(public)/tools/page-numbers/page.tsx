@@ -12,6 +12,7 @@ import {
 
 export default function AddPageNumbersPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [startPage, setStartPage] = useState(1);
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -32,9 +33,32 @@ export default function AddPageNumbersPage() {
     setError(null);
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const res = await fetch("/api/tools/page-numbers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64, startPage }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Adding page numbers failed");
+
+      const link = document.createElement("a");
+      link.href = data.dataUrl;
+      link.download = "page-numbers.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : "Failed to add page numbers");
     } finally {
       setIsProcessing(false);
     }
@@ -49,7 +73,7 @@ export default function AddPageNumbersPage() {
               icon={Upload}
               title="Click to upload or drag and drop a file"
               subtitle="Upload your file to get started"
-              accept="*/*"
+              accept="application/pdf"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -72,7 +96,7 @@ export default function AddPageNumbersPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              Page numbers added successfully! Your download should begin automatically.
             </ToolAlert>
           )}
         </div>
@@ -83,6 +107,19 @@ export default function AddPageNumbersPage() {
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
               Insert page numbers into PDF documents.
             </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Start Page Number</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={startPage}
+                  onChange={(e) => setStartPage(Number(e.target.value))}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                />
+              </div>
+            </div>
           </div>
 
           <ToolPrimaryButton onClick={handleProcess} disabled={!file} loading={isProcessing}>

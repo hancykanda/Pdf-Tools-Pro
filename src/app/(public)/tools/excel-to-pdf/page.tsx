@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { FileText, Upload, Download, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState } from 'react';
+import { FileText, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
   ToolPageShell,
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
   ToolAlert,
-} from "@/components/layout/ToolPageShell";
+} from '@/components/layout/ToolPageShell';
 
 export default function ExceltoPDFPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -17,12 +17,12 @@ export default function ExceltoPDFPage() {
   const [success, setSuccess] = useState(false);
 
   const handleFile = (selected: File | null) => {
-    if (selected) {
+    if (selected && (selected.name.endsWith('.xls') || selected.name.endsWith('.xlsx') || selected.name.endsWith('.csv'))) {
       setFile(selected);
       setError(null);
       setSuccess(false);
     } else {
-      setError("Please upload a file");
+      setError('Please upload a valid Excel file (.xls, .xlsx, or .csv)');
     }
   };
 
@@ -32,9 +32,30 @@ export default function ExceltoPDFPage() {
     setError(null);
 
     try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/tools/excel-to-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Conversion failed');
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'converted.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : 'Failed to convert Excel to PDF');
     } finally {
       setIsProcessing(false);
     }
@@ -47,9 +68,9 @@ export default function ExceltoPDFPage() {
           {!file ? (
             <ToolUploadZone
               icon={Upload}
-              title="Click to upload or drag and drop a file"
-              subtitle="Upload your file to get started"
-              accept="*/*"
+              title="Click to upload or drag and drop an Excel file"
+              subtitle="Supports .xls, .xlsx, and .csv files"
+              accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -72,16 +93,16 @@ export default function ExceltoPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              Excel converted to PDF successfully!
             </ToolAlert>
           )}
         </div>
 
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
           <div>
-            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Options</h3>
+            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Conversion Options</h3>
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Convert Excel spreadsheets to PDF format.
+              Convert your Excel spreadsheet to PDF format. The conversion preserves cell formatting and layout.
             </p>
           </div>
 
@@ -89,11 +110,11 @@ export default function ExceltoPDFPage() {
             {isProcessing ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                <span>Processing...</span>
+                <span>Converting...</span>
               </>
             ) : (
               <>
-                <span>Excel to PDF</span>
+                <span>Convert to PDF</span>
                 <Download className="w-5 h-5 shrink-0" />
               </>
             )}

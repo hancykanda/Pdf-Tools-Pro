@@ -12,6 +12,8 @@ import {
 
 export default function SignPDFPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [signatureText, setSignatureText] = useState("");
+  const [position, setPosition] = useState("bottom-center");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -27,12 +29,35 @@ export default function SignPDFPage() {
   };
 
   const handleProcess = async () => {
-    if (!file) return;
+    if (!file || !signatureText) return;
     setIsProcessing(true);
     setError(null);
 
     try {
-      setSuccess(true);
+      const reader = new FileReader();
+      reader.readAsDataURL(file);
+      reader.onload = async () => {
+        const base64 = reader.result as string;
+        const res = await fetch("/api/tools/sign-pdf", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ file: base64, text: signatureText, position }),
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.error || "Sign failed");
+
+        const link = document.createElement("a");
+        link.href = data.dataUrl;
+        link.download = data.filename || "signed.pdf";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        setSuccess(true);
+      };
+      reader.onerror = () => {
+        setError("Failed to read file");
+        setIsProcessing(false);
+      };
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Operation failed");
     } finally {
@@ -83,9 +108,36 @@ export default function SignPDFPage() {
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
               Add digital signatures to PDF documents.
             </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Signature Text</label>
+                <input
+                  type="text"
+                  value={signatureText}
+                  onChange={(e) => setSignatureText(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
+                  placeholder="e.g. Approved by John Doe"
+                />
+              </div>
+              <div>
+                <label className="block text-xs font-semibold text-gray-500 mb-1">Position</label>
+                <select
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
+                >
+                  <option value="bottom-left">Bottom Left</option>
+                  <option value="bottom-center">Bottom Center</option>
+                  <option value="bottom-right">Bottom Right</option>
+                  <option value="top-left">Top Left</option>
+                  <option value="top-center">Top Center</option>
+                  <option value="top-right">Top Right</option>
+                </select>
+              </div>
+            </div>
           </div>
 
-          <ToolPrimaryButton onClick={handleProcess} disabled={!file} loading={isProcessing}>
+          <ToolPrimaryButton onClick={handleProcess} disabled={!file || !signatureText} loading={isProcessing}>
             {isProcessing ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />

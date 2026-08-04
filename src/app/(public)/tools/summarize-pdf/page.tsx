@@ -1,28 +1,33 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { FileText, Upload, Download, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState } from 'react';
+import { FileText, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
   ToolPageShell,
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
+  ToolSecondaryButton,
   ToolAlert,
-} from "@/components/layout/ToolPageShell";
+} from '@/components/layout/ToolPageShell';
 
 export default function AISummarizerPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [summary, setSummary] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [warning, setWarning] = useState<string | null>(null);
 
   const handleFile = (selected: File | null) => {
     if (selected) {
       setFile(selected);
       setError(null);
       setSuccess(false);
+      setWarning(null);
+      setSummary('');
     } else {
-      setError("Please upload a file");
+      setError('Please upload a file');
     }
   };
 
@@ -30,14 +35,49 @@ export default function AISummarizerPage() {
     if (!file) return;
     setIsProcessing(true);
     setError(null);
+    setWarning(null);
+    setSuccess(false);
+    setSummary('');
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const cleanBase64 = base64.split(',')[1] || base64;
+      const res = await fetch('/api/tools/summarize-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: cleanBase64 }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Summarization failed');
+
+      setSummary(data.summary || '');
+      setWarning(data.warning || null);
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : 'Failed to summarize PDF');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleDownload = () => {
+    if (!summary) return;
+    const blob = new Blob([summary], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${file?.name?.replace(/\.[^/.]+$/, '') || 'document'}-summary.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -47,9 +87,9 @@ export default function AISummarizerPage() {
           {!file ? (
             <ToolUploadZone
               icon={Upload}
-              title="Click to upload or drag and drop a file"
-              subtitle="Upload your file to get started"
-              accept="*/*"
+              title="Click to upload or drag and drop a PDF file"
+              subtitle="AI will generate a concise summary"
+              accept="application/pdf"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -69,11 +109,33 @@ export default function AISummarizerPage() {
             </ToolAlert>
           )}
 
-          {success && (
+          {warning && (
+            <ToolAlert type="error">
+              <AlertCircle className="w-4 h-4" />
+              {warning}
+            </ToolAlert>
+          )}
+
+          {success && !warning && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              Summary generated successfully!
             </ToolAlert>
+          )}
+
+          {summary && (
+            <ToolCard>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Summary</h3>
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto">
+                  <Download className="w-4 h-4" />
+                  Download
+                </ToolSecondaryButton>
+              </div>
+              <div className="bg-gray-50 rounded-2xl p-4 max-h-96 overflow-y-auto">
+                <p className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{summary}</p>
+              </div>
+            </ToolCard>
           )}
         </div>
 

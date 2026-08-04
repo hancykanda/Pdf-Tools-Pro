@@ -1,14 +1,14 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { FileText, Upload, Download, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState } from 'react';
+import { FileText, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
   ToolPageShell,
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
   ToolAlert,
-} from "@/components/layout/ToolPageShell";
+} from '@/components/layout/ToolPageShell';
 
 export default function PowerPointtoPDFPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -17,12 +17,12 @@ export default function PowerPointtoPDFPage() {
   const [success, setSuccess] = useState(false);
 
   const handleFile = (selected: File | null) => {
-    if (selected) {
+    if (selected && (selected.name.endsWith('.ppt') || selected.name.endsWith('.pptx'))) {
       setFile(selected);
       setError(null);
       setSuccess(false);
     } else {
-      setError("Please upload a file");
+      setError('Please upload a valid PowerPoint file (.ppt or .pptx)');
     }
   };
 
@@ -32,9 +32,30 @@ export default function PowerPointtoPDFPage() {
     setError(null);
 
     try {
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const res = await fetch('/api/tools/powerpoint-to-pdf', {
+        method: 'POST',
+        body: formData,
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Conversion failed');
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'converted.pdf';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : 'Failed to convert PowerPoint to PDF');
     } finally {
       setIsProcessing(false);
     }
@@ -47,9 +68,9 @@ export default function PowerPointtoPDFPage() {
           {!file ? (
             <ToolUploadZone
               icon={Upload}
-              title="Click to upload or drag and drop a file"
-              subtitle="Upload your file to get started"
-              accept="*/*"
+              title="Click to upload or drag and drop a PowerPoint file"
+              subtitle="Supports .ppt and .pptx files"
+              accept=".ppt,.pptx,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.presentationml.presentation"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -72,16 +93,16 @@ export default function PowerPointtoPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              PowerPoint converted to PDF successfully!
             </ToolAlert>
           )}
         </div>
 
         <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
           <div>
-            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Options</h3>
+            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Conversion Options</h3>
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Convert PPT and PPTX presentations to PDF documents.
+              Convert your PowerPoint presentation to PDF format. Slides are rendered as pages in the output PDF.
             </p>
           </div>
 
@@ -89,11 +110,11 @@ export default function PowerPointtoPDFPage() {
             {isProcessing ? (
               <>
                 <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                <span>Processing...</span>
+                <span>Converting...</span>
               </>
             ) : (
               <>
-                <span>PowerPoint to PDF</span>
+                <span>Convert to PDF</span>
                 <Download className="w-5 h-5 shrink-0" />
               </>
             )}

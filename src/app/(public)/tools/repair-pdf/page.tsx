@@ -16,13 +16,14 @@ export default function RepairPDFPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const handleFile = (selected: File | null) => {
-    if (selected) {
-      setFile(selected);
+  const handleFile = (selected: FileList | null) => {
+    const picked = selected?.[0] || null;
+    if (picked && picked.type === "application/pdf") {
+      setFile(picked);
       setError(null);
       setSuccess(false);
     } else {
-      setError("Please upload a file");
+      setError("Please upload a valid PDF file");
     }
   };
 
@@ -32,9 +33,32 @@ export default function RepairPDFPage() {
     setError(null);
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const res = await fetch("/api/tools/repair-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64 }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Repair failed");
+
+      const link = document.createElement("a");
+      link.href = data.dataUrl;
+      link.download = "repaired.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : "Failed to repair PDF");
     } finally {
       setIsProcessing(false);
     }
@@ -47,10 +71,10 @@ export default function RepairPDFPage() {
           {!file ? (
             <ToolUploadZone
               icon={Upload}
-              title="Click to upload or drag and drop a file"
-              subtitle="Upload your file to get started"
-              accept="*/*"
-              onFiles={(files) => handleFile(files?.[0] || null)}
+              title="Click to upload or drag and drop a PDF file"
+              subtitle="We'll rebuild the PDF structure to fix corruption"
+              accept="application/pdf"
+              onFiles={handleFile}
             />
           ) : (
             <ToolCard>
@@ -72,7 +96,7 @@ export default function RepairPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              PDF repaired successfully! Your download should begin automatically.
             </ToolAlert>
           )}
         </div>
@@ -81,7 +105,8 @@ export default function RepairPDFPage() {
           <div>
             <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Options</h3>
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Fix corrupted or damaged PDF files.
+              We rewrite the PDF structure with a fresh document body, copying all pages and
+              metadata, which fixes many forms of corruption and damaged cross-reference tables.
             </p>
           </div>
 

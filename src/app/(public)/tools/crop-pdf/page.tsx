@@ -12,6 +12,7 @@ import {
 
 export default function CropPDFPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [margins, setMargins] = useState({ top: 0, bottom: 0, left: 0, right: 0 });
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -32,12 +33,39 @@ export default function CropPDFPage() {
     setError(null);
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const res = await fetch("/api/tools/crop-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64, margins }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Cropping failed");
+
+      const link = document.createElement("a");
+      link.href = data.dataUrl;
+      link.download = "cropped.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : "Failed to crop PDF");
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const updateMargin = (key: keyof typeof margins, value: string) => {
+    setMargins((prev) => ({ ...prev, [key]: Number(value) || 0 }));
   };
 
   return (
@@ -49,7 +77,7 @@ export default function CropPDFPage() {
               icon={Upload}
               title="Click to upload or drag and drop a file"
               subtitle="Upload your file to get started"
-              accept="*/*"
+              accept="application/pdf"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -72,7 +100,7 @@ export default function CropPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              PDF cropped successfully! Your download should begin automatically.
             </ToolAlert>
           )}
         </div>
@@ -83,6 +111,51 @@ export default function CropPDFPage() {
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
               Crop margins and adjust page boundaries in PDFs.
             </p>
+
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">Top (pts)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={margins.top}
+                    onChange={(e) => updateMargin("top", e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">Bottom (pts)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={margins.bottom}
+                    onChange={(e) => updateMargin("bottom", e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">Left (pts)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={margins.left}
+                    onChange={(e) => updateMargin("left", e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-2">Right (pts)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    value={margins.right}
+                    onChange={(e) => updateMargin("right", e.target.value)}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                  />
+                </div>
+              </div>
+            </div>
           </div>
 
           <ToolPrimaryButton onClick={handleProcess} disabled={!file} loading={isProcessing}>

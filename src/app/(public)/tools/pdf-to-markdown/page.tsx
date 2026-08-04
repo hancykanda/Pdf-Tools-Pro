@@ -1,17 +1,19 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { FileText, Upload, Download, CheckCircle2, AlertCircle } from "lucide-react";
+import { useState } from 'react';
+import { FileText, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import {
   ToolPageShell,
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
+  ToolSecondaryButton,
   ToolAlert,
-} from "@/components/layout/ToolPageShell";
+} from '@/components/layout/ToolPageShell';
 
 export default function PDFtoMarkdownPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [markdown, setMarkdown] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -21,8 +23,9 @@ export default function PDFtoMarkdownPage() {
       setFile(selected);
       setError(null);
       setSuccess(false);
+      setMarkdown('');
     } else {
-      setError("Please upload a file");
+      setError('Please upload a file');
     }
   };
 
@@ -30,14 +33,47 @@ export default function PDFtoMarkdownPage() {
     if (!file) return;
     setIsProcessing(true);
     setError(null);
+    setSuccess(false);
+    setMarkdown('');
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const cleanBase64 = base64.split(',')[1] || base64;
+      const res = await fetch('/api/tools/pdf-to-markdown', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pdfBase64: cleanBase64 }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Conversion failed');
+
+      setMarkdown(data.markdown || '');
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : 'Failed to convert PDF to Markdown');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handleDownload = () => {
+    if (!markdown) return;
+    const blob = new Blob([markdown], { type: 'text/markdown' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${file?.name?.replace(/\.[^/.]+$/, '') || 'document'}.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -47,9 +83,9 @@ export default function PDFtoMarkdownPage() {
           {!file ? (
             <ToolUploadZone
               icon={Upload}
-              title="Click to upload or drag and drop a file"
-              subtitle="Upload your file to get started"
-              accept="*/*"
+              title="Click to upload or drag and drop a PDF file"
+              subtitle="Convert to clean Markdown format"
+              accept="application/pdf"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -72,8 +108,23 @@ export default function PDFtoMarkdownPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              Converted to Markdown successfully!
             </ToolAlert>
+          )}
+
+          {markdown && (
+            <ToolCard>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Markdown Output</h3>
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto">
+                  <Download className="w-4 h-4" />
+                  Download
+                </ToolSecondaryButton>
+              </div>
+              <div className="bg-gray-50 rounded-2xl p-4 max-h-96 overflow-y-auto">
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{markdown}</pre>
+              </div>
+            </ToolCard>
           )}
         </div>
 

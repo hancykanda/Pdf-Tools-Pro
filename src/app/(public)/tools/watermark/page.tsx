@@ -12,6 +12,9 @@ import {
 
 export default function WatermarkPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [watermarkText, setWatermarkText] = useState("Confidential");
+  const [opacity, setOpacity] = useState(0.3);
+  const [position, setPosition] = useState("center");
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -32,9 +35,32 @@ export default function WatermarkPage() {
     setError(null);
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const res = await fetch("/api/tools/watermark", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64, text: watermarkText, opacity, position }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Watermarking failed");
+
+      const link = document.createElement("a");
+      link.href = data.dataUrl;
+      link.download = "watermarked.pdf";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : "Failed to add watermark");
     } finally {
       setIsProcessing(false);
     }
@@ -49,7 +75,7 @@ export default function WatermarkPage() {
               icon={Upload}
               title="Click to upload or drag and drop a file"
               subtitle="Upload your file to get started"
-              accept="*/*"
+              accept="application/pdf"
               onFiles={(files) => handleFile(files?.[0] || null)}
             />
           ) : (
@@ -72,7 +98,7 @@ export default function WatermarkPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              Watermark added successfully! Your download should begin automatically.
             </ToolAlert>
           )}
         </div>
@@ -83,6 +109,47 @@ export default function WatermarkPage() {
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
               Add text or image watermarks to PDFs.
             </p>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Watermark Text</label>
+                <input
+                  type="text"
+                  value={watermarkText}
+                  onChange={(e) => setWatermarkText(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                  placeholder="Confidential"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Opacity: {Math.round(opacity * 100)}%</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.05"
+                  value={opacity}
+                  onChange={(e) => setOpacity(Number(e.target.value))}
+                  className="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-2">Position</label>
+                <select
+                  value={position}
+                  onChange={(e) => setPosition(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                >
+                  <option value="center">Center</option>
+                  <option value="top-left">Top Left</option>
+                  <option value="top-right">Top Right</option>
+                  <option value="bottom-left">Bottom Left</option>
+                  <option value="bottom-right">Bottom Right</option>
+                </select>
+              </div>
+            </div>
           </div>
 
           <ToolPrimaryButton onClick={handleProcess} disabled={!file} loading={isProcessing}>

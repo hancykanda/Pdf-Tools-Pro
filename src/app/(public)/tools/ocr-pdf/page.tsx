@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { FileText, Upload, Download, CheckCircle2, AlertCircle } from "lucide-react";
+import { FileText, Upload, CheckCircle2, AlertCircle } from "lucide-react";
 import {
   ToolPageShell,
   ToolCard,
@@ -16,13 +16,14 @@ export default function OCRPDFPage() {
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
 
-  const handleFile = (selected: File | null) => {
-    if (selected) {
-      setFile(selected);
+  const handleFile = (selected: FileList | null) => {
+    const picked = selected?.[0] || null;
+    if (picked && picked.type === "application/pdf") {
+      setFile(picked);
       setError(null);
       setSuccess(false);
     } else {
-      setError("Please upload a file");
+      setError("Please upload a valid PDF file");
     }
   };
 
@@ -32,9 +33,25 @@ export default function OCRPDFPage() {
     setError(null);
 
     try {
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
+
+      const res = await fetch("/api/tools/ocr-pdf", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file: base64, filename: file.name }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "OCR request failed");
+
       setSuccess(true);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : "Failed to process OCR request");
     } finally {
       setIsProcessing(false);
     }
@@ -47,10 +64,10 @@ export default function OCRPDFPage() {
           {!file ? (
             <ToolUploadZone
               icon={Upload}
-              title="Click to upload or drag and drop a file"
-              subtitle="Upload your file to get started"
-              accept="*/*"
-              onFiles={(files) => handleFile(files?.[0] || null)}
+              title="Click to upload or drag and drop a PDF file"
+              subtitle="Upload a scanned PDF to recognize text"
+              accept="application/pdf"
+              onFiles={handleFile}
             />
           ) : (
             <ToolCard>
@@ -72,7 +89,10 @@ export default function OCRPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
+              <span>
+                OCR processing would happen here. This is a free-tier placeholder; full OCR is
+                available on a premium plan.
+              </span>
             </ToolAlert>
           )}
         </div>
@@ -81,7 +101,8 @@ export default function OCRPDFPage() {
           <div>
             <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Options</h3>
             <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Make scanned PDFs searchable and selectable.
+              Extract searchable text from scanned PDFs. The free tier validates your document and
+              returns a success state.
             </p>
           </div>
 
@@ -93,8 +114,8 @@ export default function OCRPDFPage() {
               </>
             ) : (
               <>
-                <span>OCR PDF</span>
-                <Download className="w-5 h-5 shrink-0" />
+                <span>Run OCR</span>
+                <Upload className="w-5 h-5 shrink-0" />
               </>
             )}
           </ToolPrimaryButton>
