@@ -79,22 +79,22 @@
 ## Phase 3: Shared Design System & Layout Standardization
 **Goal:** Make every page and tool feel like one coherent product by reusing the homepage layout, typography, and component patterns.
 
-- [ ] Audit current homepage layout, spacing, colors, and component patterns
-- [ ] Extract shared layout primitives into `src/components/layout/`
-  - [ ] `AppHeader` / `PublicHeader`
-  - [ ] `AppFooter`
-  - [ ] `Container` / `Section` spacing helpers
-- [ ] Extract shared UI primitives into `src/components/ui/`
-  - [ ] `Button`
-  - [ ] `Card`
-  - [ ] `Badge`
-  - [ ] `Input`
-  - [ ] `UploadDropzone`
-- [ ] Apply shared header/footer to all public tool pages
-- [ ] Apply shared header/footer to auth pages
-- [ ] Ensure responsive behavior matches homepage on mobile/tablet/desktop
-- [ ] Run visual regression checks or manual page sweep
-- [ ] Push standardized layout changes and update roadmap
+- [x] Audit current homepage layout, spacing, colors, and component patterns
+- [x] Extract shared layout primitives into `src/components/layout/`
+  - [x] `AppHeader` / `PublicHeader`
+  - [x] `AppFooter`
+  - [x] `Container` / `Section` spacing helpers
+- [x] Extract shared UI primitives into `src/components/ui/`
+  - [x] `Button`
+  - [x] `Card`
+  - [x] `Badge`
+  - [x] `Input`
+  - [x] `UploadDropzone`
+- [x] Apply shared header/footer to all public tool pages
+- [x] Apply shared header/footer to auth pages
+- [x] Ensure responsive behavior matches homepage on mobile/tablet/desktop
+- [x] Run visual regression checks or manual page sweep
+- [x] Push standardized layout changes and update roadmap
 
 **Milestone 3 Deliverable:** Consistent layout and styling across all public pages and tools.
 
@@ -218,3 +218,4 @@
 
 ## Change Log
 - 2026-08-04: Initialized repo, created ROADMAP.md, committed scaffold
+- 2026-08-04: Standardized public tool pages with shared PageShell layout components
