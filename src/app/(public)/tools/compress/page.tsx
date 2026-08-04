@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { ShieldCheck, Upload, Download, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
-import { PageContainer, Section, PageHeader, UploadZone, ActionButton, Alert, Card } from '@/components/layout/PageShell';
+import { useState } from 'react';
+import { ShieldCheck, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  ToolPageShell,
+  ToolCard,
+  ToolUploadZone,
+  ToolPrimaryButton,
+  ToolAlert,
+} from '@/components/layout/ToolPageShell';
 
 export default function CompressPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -23,12 +29,6 @@ export default function CompressPage() {
     } else {
       setError('Please upload a valid PDF file');
     }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleFile(e.dataTransfer.files);
   };
 
   const handleCompress = async () => {
@@ -64,8 +64,8 @@ export default function CompressPage() {
       document.body.removeChild(link);
 
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || 'Failed to compress PDF');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to compress PDF');
     } finally {
       setIsProcessing(false);
     }
@@ -82,56 +82,74 @@ export default function CompressPage() {
   const savings = originalSize > 0 && compressedSize > 0 ? ((1 - compressedSize / originalSize) * 100).toFixed(1) : '0.0';
 
   return (
-    <PageContainer>
-      <Section>
-        <PageHeader title="Compress PDF" description="Reduce PDF file size while preserving quality." icon={ShieldCheck} />
-
-        <UploadZone
-          icon={Upload}
-          title="Click to upload or drag and drop a PDF file"
-          subtitle="We'll compress it while preserving quality"
-          accept="application/pdf"
-          onFiles={handleFile}
-        />
-
-        {file && (
-          <Card className="mb-6">
-            <h3 className="font-display font-semibold text-brand-dark mb-4">File Details</h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="p-4 bg-gray-50 rounded-xl">
-                <p className="text-xs text-gray-500 mb-1">Original Size</p>
-                <p className="text-lg font-bold text-gray-900">{formatSize(originalSize)}</p>
-              </div>
-              {compressedSize > 0 && (
-                <div className="p-4 bg-green-50 rounded-xl">
-                  <p className="text-xs text-gray-500 mb-1">Compressed Size</p>
-                  <p className="text-lg font-bold text-green-700">{formatSize(compressedSize)}</p>
-                  <p className="text-xs text-green-600 mt-1">Saved {savings}%</p>
+    <ToolPageShell title="Compress PDF" description="Reduce PDF file size while preserving quality." icon={ShieldCheck}>
+      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          {!file ? (
+            <ToolUploadZone
+              icon={Upload}
+              title="Click to upload or drag and drop a PDF file"
+              subtitle="We'll compress it while preserving quality"
+              accept="application/pdf"
+              onFiles={handleFile}
+            />
+          ) : (
+            <ToolCard>
+              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">File Details</h3>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="p-4 bg-gray-50 rounded-2xl">
+                  <p className="text-xs text-gray-500 mb-1">Original Size</p>
+                  <p className="text-lg font-bold text-gray-900">{formatSize(originalSize)}</p>
                 </div>
-              )}
-            </div>
+                {compressedSize > 0 && (
+                  <div className="p-4 bg-green-50 rounded-2xl">
+                    <p className="text-xs text-gray-500 mb-1">Compressed Size</p>
+                    <p className="text-lg font-bold text-green-700">{formatSize(compressedSize)}</p>
+                    <p className="text-xs text-green-600 mt-1">Saved {savings}%</p>
+                  </div>
+                )}
+              </div>
+            </ToolCard>
+          )}
 
-            <ActionButton onClick={handleCompress} loading={isProcessing} className="mt-4">
-              <ShieldCheck className="w-5 h-5" />
-              Compress PDF
-            </ActionButton>
-          </Card>
-        )}
+          {error && (
+            <ToolAlert type="error">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </ToolAlert>
+          )}
 
-        {error && (
-          <Alert type="error">
-            <AlertCircle className="w-4 h-4" />
-            {error}
-          </Alert>
-        )}
+          {success && (
+            <ToolAlert type="success">
+              <CheckCircle2 className="w-4 h-4" />
+              PDF compressed successfully! Your download should begin automatically.
+            </ToolAlert>
+          )}
+        </div>
 
-        {success && (
-          <Alert type="success">
-            <CheckCircle2 className="w-4 h-4" />
-            PDF compressed successfully! Your download should begin automatically.
-          </Alert>
-        )}
-      </Section>
-    </PageContainer>
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
+          <div>
+            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Compression Options</h3>
+            <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
+              Reduce PDF file size while preserving quality. Upload your PDF and we&apos;ll compress it for you.
+            </p>
+          </div>
+
+          <ToolPrimaryButton onClick={handleCompress} disabled={!file} loading={isProcessing}>
+            {isProcessing ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <>
+                <span>Compress PDF</span>
+                <Download className="w-5 h-5 shrink-0" />
+              </>
+            )}
+          </ToolPrimaryButton>
+        </div>
+      </div>
+    </ToolPageShell>
   );
 }

@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
 import { cookies } from 'next/headers';
 import { prisma } from '@/lib/prisma';
 
@@ -26,7 +26,7 @@ export async function createSession(user: { id: string; email: string; name?: st
     exp,
   };
 
-  const token = await new SignJWT(payload as any)
+  const token = await new SignJWT(payload as unknown as JWTPayload)
     .setProtectedHeader({ alg: 'HS256' })
     .sign(JWT_SECRET);
 

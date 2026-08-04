@@ -1,8 +1,15 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { FileEdit, Upload, Download, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
-import { PageContainer, Section, PageHeader, UploadZone, ActionButton, Alert, Card } from '@/components/layout/PageShell';
+import { useState } from 'react';
+import { FileEdit, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  ToolPageShell,
+  ToolCard,
+  ToolUploadZone,
+  ToolPrimaryButton,
+  ToolSecondaryButton,
+  ToolAlert,
+} from '@/components/layout/ToolPageShell';
 
 export default function PdfToWordPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -20,12 +27,6 @@ export default function PdfToWordPage() {
     } else {
       setError('Please upload a valid PDF file');
     }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleFile(e.dataTransfer.files[0] || null);
   };
 
   const handleExtract = async () => {
@@ -53,8 +54,8 @@ export default function PdfToWordPage() {
 
       setText(data.text || '');
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || 'Failed to extract text from PDF');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to extract text from PDF');
     } finally {
       setIsExtracting(false);
     }
@@ -91,61 +92,70 @@ export default function PdfToWordPage() {
   };
 
   return (
-    <PageContainer>
-      <Section>
-        <PageHeader title="PDF to Word" description="Extract text from PDF and download as Word document." icon={FileEdit} />
+    <ToolPageShell title="PDF to Word" description="Extract text from PDF and download as Word document." icon={FileEdit} popular>
+      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          {!file ? (
+            <ToolUploadZone
+              icon={Upload}
+              title="Click to upload or drag and drop a PDF file"
+              subtitle="Text will be extracted and formatted for Word"
+              accept="application/pdf"
+              onFiles={(files) => handleFile(files?.[0] || null)}
+            />
+          ) : (
+            <ToolCard>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Selected File</h3>
+                <ToolPrimaryButton onClick={handleExtract} loading={isExtracting} className="!w-auto">
+                  {isExtracting ? 'Extracting...' : 'Extract Text'}
+                </ToolPrimaryButton>
+              </div>
+              <div className="p-4 bg-gray-50 rounded-2xl">
+                <span className="text-sm font-medium text-gray-700">{file.name}</span>
+              </div>
+            </ToolCard>
+          )}
 
-        <UploadZone
-          icon={Upload}
-          title="Click to upload or drag and drop a PDF file"
-          subtitle="Text will be extracted and formatted for Word"
-          accept="application/pdf"
-          onFiles={(files) => handleFile(files?.[0] || null)}
-        />
+          {error && (
+            <ToolAlert type="error">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </ToolAlert>
+          )}
 
-        {file && (
-          <Card className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display font-semibold text-brand-dark">Selected File</h3>
-              <ActionButton onClick={handleExtract} loading={isExtracting} className="!w-auto">
-                {isExtracting ? 'Extracting...' : 'Extract Text'}
-              </ActionButton>
-            </div>
-            <div className="p-3 bg-gray-50 rounded-xl">
-              <span className="text-sm font-medium text-gray-700">{file.name}</span>
-            </div>
-          </Card>
-        )}
+          {success && (
+            <ToolAlert type="success">
+              <CheckCircle2 className="w-4 h-4" />
+              Text extracted successfully!
+            </ToolAlert>
+          )}
 
-        {error && (
-          <Alert type="error">
-            <AlertCircle className="w-4 h-4" />
-            {error}
-          </Alert>
-        )}
+          {text && (
+            <ToolCard>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Extracted Text</h3>
+                <ToolSecondaryButton onClick={handleDownloadWord} className="!w-auto">
+                  <Download className="w-4 h-4" />
+                  Download Word
+                </ToolSecondaryButton>
+              </div>
+              <div className="bg-gray-50 rounded-2xl p-4 max-h-96 overflow-y-auto">
+                <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{text}</pre>
+              </div>
+            </ToolCard>
+          )}
+        </div>
 
-        {success && (
-          <Alert type="success">
-            <CheckCircle2 className="w-4 h-4" />
-            Text extracted successfully!
-          </Alert>
-        )}
-
-        {text && (
-          <Card className="mb-6">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="font-display font-semibold text-brand-dark">Extracted Text</h3>
-              <ActionButton onClick={handleDownloadWord} variant="secondary" className="!w-auto">
-                <Download className="w-4 h-4" />
-                Download Word
-              </ActionButton>
-            </div>
-            <div className="bg-gray-50 rounded-xl p-4 max-h-96 overflow-y-auto">
-              <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">{text}</pre>
-            </div>
-          </Card>
-        )}
-      </Section>
-    </PageContainer>
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
+          <div>
+            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Extraction Options</h3>
+            <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
+              Extract text content from your PDF and download it as a Word document.
+            </p>
+          </div>
+        </div>
+      </div>
+    </ToolPageShell>
   );
 }

@@ -74,6 +74,50 @@
 
 **Milestone 2 Deliverable:** All 7 free tools are functional in the public zone with working API routes and UI.
 
+### Additional Free Tools v1 (Public Zone)
+**Goal:** Expand the public toolset to match competitor coverage and increase organic traffic.
+
+#### Organize PDF
+- [ ] Add `/tools/remove-pages` page and API route
+- [ ] Add `/tools/extract-pages` page and API route
+- [ ] Add `/tools/organize-pdf` page with drag/drop reorder, add, and delete UI
+- [ ] Test organize flow end-to-end
+
+#### Optimize PDF
+- [ ] Add `/tools/repair-pdf` page and API route
+- [ ] Add `/tools/ocr-pdf` public free tier route and page
+
+#### Convert to PDF
+- [ ] Add `/tools/powerpoint-to-pdf` page and API route
+- [ ] Add `/tools/excel-to-pdf` page and API route
+- [ ] Add `/tools/html-to-pdf` page and API route
+
+#### Convert from PDF
+- [ ] Add `/tools/pdf-to-powerpoint` page and API route
+- [ ] Add `/tools/pdf-to-excel` page and API route
+- [ ] Add `/tools/pdf-to-pdfa` page and API route
+
+#### Edit PDF
+- [ ] Add `/tools/rotate-pdf` page and API route
+- [ ] Add `/tools/page-numbers` page and API route
+- [ ] Add `/tools/watermark` page and API route
+- [ ] Add `/tools/crop-pdf` page and API route
+- [ ] Add `/tools/edit-pdf` page with text/image/shape annotations
+
+#### PDF Security
+- [ ] Add `/tools/unlock-pdf` page and API route
+- [ ] Add `/tools/protect-pdf` page and API route
+- [ ] Add `/tools/sign-pdf` page and API route
+- [ ] Add `/tools/redact-pdf` page and API route
+- [ ] Add `/tools/compare-pdf` page and API route
+
+#### PDF Intelligence
+- [ ] Add `/tools/summarize-pdf` page and API route
+- [ ] Add `/tools/translate-pdf` page and API route
+- [ ] Add `/tools/pdf-to-markdown` page and API route
+
+**Milestone 2b Deliverable:** Public toolset covers merge, split, compress, convert, edit, organize, security, OCR, and AI intelligence tools.
+
 ---
 
 ## Phase 3: Shared Design System & Layout Standardization
@@ -120,15 +164,15 @@
 ## Phase 5: Premium API Infrastructure
 **Goal:** Build the backend routes and infrastructure needed for premium features.
 
-- [ ] Set up MinIO client and file upload/download helpers
-- [ ] Create `/api/premium/upload` route for secure file handling
-- [ ] Create `/api/premium/files/:id` route for signed downloads
-- [ ] Set up BullMQ + Redis job queues
-- [ ] Create `/api/premium/jobs/:id/status` route
-- [ ] Add Gemini API wrapper with rate-limit handling
-- [ ] Create `/api/premium/ai/generate` route
-- [ ] Test premium API routes with authenticated requests
-- [ ] Push premium API infrastructure and update roadmap
+- [x] Set up MinIO client and file upload/download helpers
+- [x] Create `/api/premium/upload` route for secure file handling
+- [x] Create `/api/premium/files/:id` route for signed downloads
+- [x] Set up BullMQ + Redis job queues
+- [x] Create `/api/premium/jobs/:id/status` route
+- [x] Add Gemini API wrapper with rate-limit handling
+- [x] Create `/api/premium/ai/generate` route
+- [x] Test premium API routes with authenticated requests
+- [x] Push premium API infrastructure and update roadmap
 
 **Milestone 5 Deliverable:** Secure premium API layer with file storage, job queue, and AI wrapper.
 
@@ -206,8 +250,8 @@
 ---
 
 ## Current Sprint Focus
-**Sprint:** Layout Standardization & Shared Design System
-**Target:** Extract homepage layout into reusable components and apply to all pages/tools.
+**Sprint:** Premium Features - AI & OCR
+**Target:** Implement AI PDF editor, OCR + organize PDF, and exam header customizer.
 
 ---
 
@@ -216,3 +260,6 @@
 - 2026-08-04: Standardized public tool pages with shared PageShell layout components
 - 2026-08-04: Applied shared layout to auth pages and public info pages; build passes
 - 2026-08-04: Added premium dashboard shell with placeholder pages and premium API route stubs
+- 2026-08-04: Implemented Phase 5 premium API infrastructure (MinIO, BullMQ, Gemini, upload/files/jobs/ai routes); build passes
+- 2026-08-04: Audited iLovePDF tool catalog and expanded Phase 2 roadmap with 23 additional public tools across organize, optimize, convert, edit, security, and AI intelligence categories
+- 2026-08-04: Updated public tools listing page and header/footer tool navigation to reflect expanded roadmap

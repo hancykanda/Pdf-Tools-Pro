@@ -1,8 +1,14 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { Scissors, Upload, Download, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
-import { PageContainer, Section, PageHeader, UploadZone, ActionButton, Alert, Card } from '@/components/layout/PageShell';
+import { useState } from 'react';
+import { Scissors, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  ToolPageShell,
+  ToolCard,
+  ToolUploadZone,
+  ToolPrimaryButton,
+  ToolAlert,
+} from '@/components/layout/ToolPageShell';
 
 export default function SplitPage() {
   const [file, setFile] = useState<File | null>(null);
@@ -19,12 +25,6 @@ export default function SplitPage() {
     } else {
       setError('Please upload a valid PDF file');
     }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleFile(e.dataTransfer.files[0] || null);
   };
 
   const parsePageRange = (range: string, maxPages: number): number[] => {
@@ -88,67 +88,85 @@ export default function SplitPage() {
       document.body.removeChild(link);
 
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || 'Failed to split PDF');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to split PDF');
     } finally {
       setIsProcessing(false);
     }
   };
 
   return (
-    <PageContainer>
-      <Section>
-        <PageHeader title="Split PDF" description="Extract specific pages or page ranges from your PDF." icon={Scissors} />
+    <ToolPageShell title="Split PDF" description="Extract specific pages or page ranges from your PDF." icon={Scissors}>
+      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          {!file ? (
+            <ToolUploadZone
+              icon={Upload}
+              title="Click to upload or drag and drop a PDF file"
+              subtitle="Select the PDF you want to split"
+              accept="application/pdf"
+              onFiles={(files) => handleFile(files?.[0] || null)}
+            />
+          ) : (
+            <ToolCard>
+              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Selected File</h3>
+              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl mb-6">
+                <span className="text-sm font-medium text-gray-700">{file.name}</span>
+                <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+              </div>
 
-        <UploadZone
-          icon={Upload}
-          title="Click to upload or drag and drop a PDF file"
-          subtitle="Select the PDF you want to split"
-          accept="application/pdf"
-          onFiles={(files) => handleFile(files?.[0] || null)}
-        />
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Page Range</label>
+                <input
+                  type="text"
+                  value={pageRange}
+                  onChange={(e) => setPageRange(e.target.value)}
+                  placeholder="e.g., 1-3, 5, 7-9"
+                  className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                />
+                <p className="text-xs text-gray-500 mt-1">Enter page numbers or ranges (e.g., 1-3, 5, 7-9)</p>
+              </div>
+            </ToolCard>
+          )}
 
-        {file && (
-          <Card className="mb-6">
-            <h3 className="font-display font-semibold text-brand-dark mb-4">Selected File</h3>
-            <div className="flex items-center justify-between p-3 bg-gray-50 rounded-xl mb-4">
-              <span className="text-sm font-medium text-gray-700">{file.name}</span>
-              <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
-            </div>
+          {error && (
+            <ToolAlert type="error">
+              <AlertCircle className="w-4 h-4" />
+              {error}
+            </ToolAlert>
+          )}
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Page Range</label>
-              <input
-                type="text"
-                value={pageRange}
-                onChange={(e) => setPageRange(e.target.value)}
-                placeholder="e.g., 1-3, 5, 7-9"
-                className="w-full px-4 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
-              />
-              <p className="text-xs text-gray-500 mt-1">Enter page numbers or ranges (e.g., 1-3, 5, 7-9)</p>
-            </div>
-          </Card>
-        )}
+          {success && (
+            <ToolAlert type="success">
+              <CheckCircle2 className="w-4 h-4" />
+              PDF split successfully! Your download should begin automatically.
+            </ToolAlert>
+          )}
+        </div>
 
-        {error && (
-          <Alert type="error">
-            <AlertCircle className="w-4 h-4" />
-            {error}
-          </Alert>
-        )}
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
+          <div>
+            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Split Options</h3>
+            <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
+              Extract specific pages from your PDF. Use the page range input to select which pages to extract.
+            </p>
+          </div>
 
-        {success && (
-          <Alert type="success">
-            <CheckCircle2 className="w-4 h-4" />
-            PDF split successfully! Your download should begin automatically.
-          </Alert>
-        )}
-
-        <ActionButton onClick={handleSplit} disabled={!file} loading={isProcessing}>
-          <Download className="w-5 h-5" />
-          Split PDF
-        </ActionButton>
-      </Section>
-    </PageContainer>
+          <ToolPrimaryButton onClick={handleSplit} disabled={!file} loading={isProcessing}>
+            {isProcessing ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <>
+                <span>Split PDF</span>
+                <Download className="w-5 h-5 shrink-0" />
+              </>
+            )}
+          </ToolPrimaryButton>
+        </div>
+      </div>
+    </ToolPageShell>
   );
 }

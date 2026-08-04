@@ -1,8 +1,16 @@
 'use client';
 
-import { useState, useRef } from 'react';
-import { FileStack, Upload, Trash2, ArrowUp, ArrowDown, Download, RefreshCw, CheckCircle2, AlertCircle, Home, RotateCcw } from 'lucide-react';
-import { PageContainer, Section, PageHeader, Card, ActionButton } from '@/components/layout/PageShell';
+import { useState } from 'react';
+import { FileStack, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import {
+  ToolPageShell,
+  ToolCard,
+  ToolUploadZone,
+  ToolPrimaryButton,
+  ToolSecondaryButton,
+  ToolAlert,
+  FileItem,
+} from '@/components/layout/ToolPageShell';
 
 export default function MergePage() {
   const [files, setFiles] = useState<File[]>([]);
@@ -16,12 +24,6 @@ export default function MergePage() {
     setFiles((prev) => [...prev, ...pdfFiles]);
     setError(null);
     setSuccess(false);
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
-    handleFiles(e.dataTransfer.files);
   };
 
   const handleRemove = (index: number) => {
@@ -84,8 +86,8 @@ export default function MergePage() {
       document.body.removeChild(link);
 
       setSuccess(true);
-    } catch (err: any) {
-      setError(err.message || 'Failed to merge PDFs');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to merge PDFs');
     } finally {
       setIsProcessing(false);
     }
@@ -106,8 +108,8 @@ export default function MergePage() {
 
   if (success) {
     return (
-      <PageContainer>
-        <Section>
+      <ToolPageShell title="Merge PDF" description="Combine multiple PDF documents into a single file." icon={FileStack} popular>
+        <ToolCard>
           <div className="flex flex-col items-center justify-center py-12 max-w-2xl mx-auto">
             <div className="p-5 bg-green-50 text-green-600 rounded-full mb-6">
               <CheckCircle2 className="w-16 h-16 animate-bounce" />
@@ -118,170 +120,119 @@ export default function MergePage() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
-              <button
-                onClick={handleReset}
-                className="flex items-center justify-center gap-2 px-6 py-3 bg-white text-gray-700 hover:bg-gray-50 font-semibold rounded-2xl border border-gray-200 cursor-pointer transition-all w-full sm:w-auto"
-              >
-                <RotateCcw className="w-5 h-5" />
+              <ToolSecondaryButton onClick={handleReset}>
+                <Upload className="w-5 h-5" />
                 Merge More Files
-              </button>
+              </ToolSecondaryButton>
             </div>
           </div>
-        </Section>
-      </PageContainer>
+        </ToolCard>
+      </ToolPageShell>
     );
   }
 
   return (
-    <PageContainer>
-      <Section>
-        <PageHeader title="Merge PDF" description="Combine multiple PDF documents into a single file." icon={FileStack} />
-
-        <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-          <div className="lg:col-span-2 flex flex-col gap-6">
-            {files.length === 0 ? (
-              <div
-                onDrop={handleDrop}
-                onDragOver={(e) => e.preventDefault()}
-                className="border-2 border-dashed border-gray-200 rounded-3xl p-8 text-center hover:border-brand-red transition-colors cursor-pointer"
-                onClick={() => {
-                  const input = document.createElement('input');
-                  input.type = 'file';
-                  input.accept = 'application/pdf';
-                  input.multiple = true;
-                  input.onchange = (e) => handleFiles((e.target as HTMLInputElement).files);
-                  input.click();
-                }}
-              >
-                <Upload className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-700 font-medium mb-1">Click to upload or drag and drop PDF files</p>
-                <p className="text-gray-400 text-sm">Select 2 or more PDF files to merge</p>
+    <ToolPageShell title="Merge PDF" description="Combine multiple PDF documents into a single file." icon={FileStack} popular>
+      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
+        <div className="lg:col-span-2 flex flex-col gap-6">
+          {files.length === 0 ? (
+            <ToolUploadZone
+              icon={Upload}
+              title="Click to upload or drag and drop PDF files"
+              subtitle="Select 2 or more PDF files to merge"
+              accept="application/pdf"
+              multiple
+              onFiles={handleFiles}
+            />
+          ) : (
+            <ToolCard>
+              <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-50">
+                <h3 className="font-display font-semibold text-lg text-brand-dark flex items-center gap-2">
+                  <FileStack className="w-5 h-5 text-brand-red" />
+                  Selected PDFs ({files.length})
+                </h3>
+                <button
+                  onClick={() => setFiles([])}
+                  className="text-xs text-red-500 hover:text-red-700 font-medium hover:underline cursor-pointer"
+                >
+                  Clear all
+                </button>
               </div>
-            ) : (
-              <Card className="!p-6 !rounded-3xl">
-                <div className="flex items-center justify-between mb-6 pb-4 border-b border-gray-50">
-                  <h3 className="font-display font-semibold text-lg text-brand-dark flex items-center gap-2">
-                    <FileStack className="w-5 h-5 text-brand-red" />
-                    Selected PDFs ({files.length})
-                  </h3>
-                  <button onClick={() => setFiles([])} className="text-xs text-red-500 hover:text-red-700 font-medium hover:underline cursor-pointer">
-                    Clear all
-                  </button>
-                </div>
 
-                <div className="flex flex-col gap-3 max-h-[480px] overflow-y-auto pr-1">
-                  {files.map((file, index) => (
-                    <div
-                      key={index}
-                      className="flex items-center justify-between p-4 bg-gray-50 border border-gray-100 rounded-2xl hover:bg-gray-100/50 transition-all"
-                    >
-                      <div className="flex items-center gap-3 overflow-hidden">
-                        <div className="p-2 bg-red-100/50 text-brand-red rounded-lg">
-                          <FileStack className="w-5 h-5" />
-                        </div>
-                        <div className="overflow-hidden">
-                          <p className="text-sm font-semibold text-brand-dark truncate">{file.name}</p>
-                          <p className="text-xs text-gray-400 mt-0.5">{formatSize(file.size)}</p>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => handleMoveUp(index)}
-                          disabled={index === 0}
-                          className="p-1.5 text-gray-400 hover:text-brand-dark hover:bg-white rounded-lg border border-transparent disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
-                          title="Move Up"
-                        >
-                          <ArrowUp className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleMoveDown(index)}
-                          disabled={index === files.length - 1}
-                          className="p-1.5 text-gray-400 hover:text-brand-dark hover:bg-white rounded-lg border border-transparent disabled:opacity-30 disabled:hover:bg-transparent cursor-pointer"
-                          title="Move Down"
-                        >
-                          <ArrowDown className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => handleRemove(index)}
-                          className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-white rounded-lg border border-transparent cursor-pointer"
-                          title="Remove"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="mt-6 border-t border-gray-50 pt-6">
-                  <div
-                    onDrop={handleDrop}
-                    onDragOver={(e) => e.preventDefault()}
-                    className="border-2 border-dashed border-gray-200 rounded-2xl p-6 text-center hover:border-brand-red transition-colors cursor-pointer"
-                    onClick={() => {
-                      const input = document.createElement('input');
-                      input.type = 'file';
-                      input.accept = 'application/pdf';
-                      input.multiple = true;
-                      input.onchange = (e) => handleFiles((e.target as HTMLInputElement).files);
-                      input.click();
-                    }}
-                  >
-                    <Upload className="w-8 h-8 text-gray-400 mx-auto mb-2" />
-                    <p className="text-gray-700 font-medium text-sm">Add more PDF files</p>
-                  </div>
-                </div>
-              </Card>
-            )}
-          </div>
-
-          <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
-            <div>
-              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Merge PDF Options</h3>
-              <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-                Combine multiple PDF files into one. Drag and drop the list files or use the arrow controls on the left to change their order.
-              </p>
-
-              <div className="space-y-4 bg-gray-50 p-4 rounded-2xl mb-6">
-                <div className="flex justify-between text-xs font-semibold text-gray-500">
-                  <span>Total Documents:</span>
-                  <span className="text-brand-dark">{files.length}</span>
-                </div>
-                <div className="flex justify-between text-xs font-semibold text-gray-500">
-                  <span>Combined Size:</span>
-                  <span className="text-brand-dark">{formatSize(files.reduce((sum, f) => sum + f.size, 0))}</span>
-                </div>
+              <div className="flex flex-col gap-3 max-h-[480px] overflow-y-auto pr-1">
+                {files.map((file, index) => (
+                  <FileItem
+                    key={index}
+                    name={file.name}
+                    size={formatSize(file.size)}
+                    onRemove={() => handleRemove(index)}
+                    onMoveUp={() => handleMoveUp(index)}
+                    onMoveDown={() => handleMoveDown(index)}
+                    canMoveUp={index !== 0}
+                    canMoveDown={index !== files.length - 1}
+                  />
+                ))}
               </div>
-            </div>
 
-            <button
-              onClick={handleMerge}
-              disabled={files.length < 2 || isProcessing}
-              className="w-full flex items-center justify-center gap-2 px-6 py-4 bg-brand-red text-white disabled:opacity-40 disabled:hover:bg-brand-red hover:bg-red-700 font-semibold rounded-2xl cursor-pointer transition-all shadow-lg shadow-red-500/10 text-xs uppercase tracking-wider"
-            >
-              {isProcessing ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                  <span>Processing...</span>
-                </>
-              ) : (
-                <>
-                  <span>Merge PDF</span>
-                  <Download className="w-5 h-5 shrink-0" />
-                </>
-              )}
-            </button>
-          </div>
+              <div className="mt-6 border-t border-gray-50 pt-6">
+                <ToolUploadZone
+                  icon={Upload}
+                  title="Add more PDF files"
+                  subtitle="Drag and drop or click to browse"
+                  accept="application/pdf"
+                  multiple
+                  onFiles={handleFiles}
+                />
+              </div>
+            </ToolCard>
+          )}
         </div>
 
-        {error && (
-          <div className="mt-6 flex items-center gap-2 bg-red-50 text-red-700 px-4 py-3 rounded-xl text-sm">
+        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
+          <div>
+            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Merge PDF Options</h3>
+            <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
+              Combine multiple PDF files into one. Drag and drop the list files or use the arrow controls on the left to change their order.
+            </p>
+
+            <div className="space-y-4 bg-gray-50 p-4 rounded-2xl mb-6">
+              <div className="flex justify-between text-xs font-semibold text-gray-500">
+                <span>Total Documents:</span>
+                <span className="text-brand-dark">{files.length}</span>
+              </div>
+              <div className="flex justify-between text-xs font-semibold text-gray-500">
+                <span>Combined Size:</span>
+                <span className="text-brand-dark">{formatSize(files.reduce((sum, f) => sum + f.size, 0))}</span>
+              </div>
+            </div>
+          </div>
+
+          <ToolPrimaryButton onClick={handleMerge} disabled={files.length < 2 || isProcessing}>
+            {isProcessing ? (
+              <>
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                <span>Processing...</span>
+              </>
+            ) : (
+              <>
+                <span>Merge PDF</span>
+                <svg className="w-5 h-5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                </svg>
+              </>
+            )}
+          </ToolPrimaryButton>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mt-6">
+          <ToolAlert type="error">
             <AlertCircle className="w-4 h-4" />
             {error}
-          </div>
-        )}
-      </Section>
-    </PageContainer>
+          </ToolAlert>
+        </div>
+      )}
+    </ToolPageShell>
   );
 }
