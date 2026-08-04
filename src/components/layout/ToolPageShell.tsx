@@ -1,3 +1,6 @@
+'use client';
+
+import { useRef } from 'react';
 import { ReactNode } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, TrendingUp, ArrowUp, ArrowDown } from 'lucide-react';
@@ -88,6 +91,8 @@ export function ToolUploadZone({
   multiple?: boolean;
   onFiles: (files: FileList | null) => void;
 }) {
+  const inputRef = useRef<HTMLInputElement>(null);
+
   return (
     <div
       onDrop={(e) => {
@@ -97,15 +102,16 @@ export function ToolUploadZone({
       }}
       onDragOver={(e) => e.preventDefault()}
       className="border-2 border-dashed border-gray-200 rounded-3xl p-8 sm:p-12 text-center hover:border-brand-red transition-colors cursor-pointer"
-      onClick={() => {
-        const input = document.createElement('input');
-        input.type = 'file';
-        input.accept = accept;
-        if (multiple) input.multiple = true;
-        input.onchange = (e) => onFiles((e.target as HTMLInputElement).files);
-        input.click();
-      }}
+      onClick={() => inputRef.current?.click()}
     >
+      <input
+        ref={inputRef}
+        type="file"
+        accept={accept}
+        multiple={multiple}
+        className="hidden"
+        onChange={(e) => onFiles(e.target.files)}
+      />
       <div className="p-4 bg-red-50 text-brand-red rounded-2xl w-fit mx-auto mb-4">
         <Icon className="w-10 h-10" />
       </div>

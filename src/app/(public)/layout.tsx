@@ -130,6 +130,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
                 />
                 {searchQuery && (
                   <button
+                    type="button"
                     onClick={() => setSearchQuery('')}
                     className="p-0.5 hover:bg-gray-200 text-gray-400 rounded-full transition-colors ml-1"
                   >
@@ -137,6 +138,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
                   </button>
                 )}
                 <button
+                  type="button"
                   onClick={() => {
                     setSearchOpen(false);
                     setSearchQuery('');
@@ -148,6 +150,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
               </div>
             ) : (
               <button
+                type="button"
                 onClick={() => setSearchOpen(true)}
                 className="p-2 text-gray-600 hover:text-brand-red bg-gray-50 hover:bg-gray-100 border border-gray-200/60 rounded-full transition-all flex items-center gap-1.5 text-xs font-semibold pointer-events-auto"
                 title="Search PDF tools"
@@ -159,6 +162,7 @@ export default function PublicLayout({ children }: { children: React.ReactNode }
 
             {/* Mobile Hamburger */}
             <button
+              type="button"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
               className="lg:hidden p-2 text-gray-500 hover:text-brand-red bg-gray-50 hover:bg-gray-100 border border-gray-200/50 rounded-xl transition-all pointer-events-auto"
               aria-label="Toggle navigation menu"
