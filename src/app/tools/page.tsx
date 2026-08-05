@@ -1,5 +1,4 @@
 import Link from 'next/link';
-import { Zap } from 'lucide-react';
 import {
   MergePdfIcon,
   SplitPdfIcon,
@@ -31,7 +30,7 @@ import {
   SummarizePdfIcon,
   TranslatePdfIcon,
   PdfToMarkdownIcon,
-} from '@/components/ui/ToolIcons';
+} from '@/components/ui/ToolCardIcons';
 
 const categories = [
   {
@@ -99,7 +98,7 @@ const categories = [
 export default function ToolsPage() {
   return (
     <div className="min-h-screen bg-[#F8F9FA]">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center mb-16">
           <h1 className="font-display font-extrabold text-3xl sm:text-4xl text-brand-dark mb-4">
             Free PDF Tools
@@ -130,23 +129,17 @@ export default function ToolsPage() {
                   <Link
                     key={tool.name}
                     href={tool.href}
-                    className="group relative flex flex-col bg-white p-6 rounded-2xl border border-gray-100 shadow-sm hover:shadow-2xl hover:border-brand-red/30 transition-all cursor-pointer overflow-hidden transform hover:-translate-y-1.5"
+                    className="block bg-white rounded-2xl border border-gray-200 p-6 transition-all duration-200 hover:border-gray-400 hover:shadow-sm"
                   >
-                    <div className="flex items-center gap-4 mb-4">
-                      <div className="p-3 bg-gray-50 rounded-xl group-hover:bg-red-50 transition-colors">
-                        <tool.icon className="w-6 h-6 text-brand-red" />
-                      </div>
-                      <div>
-                        <h3 className="font-display font-bold text-lg text-brand-dark group-hover:text-brand-red transition-colors">
-                          {tool.name}
-                        </h3>
-                        <p className="text-gray-500 text-xs sm:text-sm">{tool.description}</p>
-                      </div>
+                    <div className="mb-4">
+                      <tool.icon />
                     </div>
-                    <div className="flex items-center justify-between mt-auto pt-4 border-t border-gray-50 text-xs font-bold text-gray-400 group-hover:text-brand-red transition-all">
-                      <span>Open Tool</span>
-                      <Zap className="w-4 h-4" />
-                    </div>
+                    <h3 className="text-lg font-bold text-gray-900 mb-1">
+                      {tool.name}
+                    </h3>
+                    <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">
+                      {tool.description}
+                    </p>
                   </Link>
                 ))}
               </div>
