@@ -1,46 +1,59 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FileImage, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Image, Upload, Download, CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { useToolState } from '@/hooks/useToolState';
 import {
   ToolPageShell,
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
+  ToolSecondaryButton,
   ToolAlert,
-} from '@/components/layout/ToolPageShell';
+  StepIndicator,
+  RelatedTools,
+} from '@/components/layout';
+
+interface PdfJsPage {
+  getViewport(opts: { scale: number }): { height: number; width: number };
+  render(opts: { canvasContext: CanvasRenderingContext2D; viewport: { height: number; width: number } }): {
+    promise: Promise<void>;
+  };
+}
+
+interface PdfJsDocument {
+  numPages: number;
+  getPage(n: number): Promise<PdfJsPage>;
+}
+
+interface PdfJsLib {
+  getDocument(opts: { data: Uint8Array }): {
+    promise: Promise<PdfJsDocument>;
+  };
+  GlobalWorkerOptions?: { workerSrc?: string };
+}
+
+interface PdfJsWindow {
+  pdfjsLib?: PdfJsLib;
+  GlobalWorkerOptions?: { workerSrc?: string };
+}
 
 export default function PdfToJpgPage() {
-  interface PdfJsPage {
-    getViewport(opts: { scale: number }): { height: number; width: number };
-    render(opts: { canvasContext: CanvasRenderingContext2D; viewport: { height: number; width: number } }): {
-      promise: Promise<void>;
-    };
-  }
-
-  interface PdfJsDocument {
-    numPages: number;
-    getPage(n: number): Promise<PdfJsPage>;
-  }
-
-  interface PdfJsLib {
-    getDocument(opts: { data: Uint8Array }): {
-      promise: Promise<PdfJsDocument>;
-    };
-    GlobalWorkerOptions?: { workerSrc?: string };
-  }
-
-  interface PdfJsWindow {
-    pdfjsLib?: PdfJsLib;
-    GlobalWorkerOptions?: { workerSrc?: string };
-  }
-
-  const [file, setFile] = useState<File | null>(null);
   const [images, setImages] = useState<string[]>([]);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-
+  const {
+    step,
+    setStep,
+    file,
+    setFile,
+                    isProcessing,
+    setIsProcessing,
+    error,
+    setError,
+        setSuccess,
+    goToOptions,
+    goToDownload,
+    resetAll,
+  } = useToolState<Record<string, unknown>>();
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -62,12 +75,21 @@ export default function PdfToJpgPage() {
   const handleFile = (selected: File | null) => {
     if (selected && selected.type === 'application/pdf') {
       setFile(selected);
-      setImages([]);
       setError(null);
       setSuccess(false);
+      setImages([]);
     } else {
       setError('Please upload a valid PDF file');
     }
+  };
+
+  const handleContinueToOptions = () => {
+    if (!file) {
+      setError('Please select a file to continue');
+      return;
+    }
+    setError(null);
+    goToOptions();
   };
 
   const handleConvert = async () => {
@@ -76,24 +98,15 @@ export default function PdfToJpgPage() {
     setError(null);
 
     try {
-      const pdfjsLib = (window as unknown as PdfJsWindow).pdfjsLib;
-      if (!pdfjsLib) throw new Error('PDF.js is not loaded yet. Please wait a moment and try again.');
+      const arrayBuffer = await file.arrayBuffer();
+      const bytes = new Uint8Array(arrayBuffer);
 
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-      });
-
-      const cleanBase64 = base64.split(',')[1] || base64;
-      const binaryString = atob(cleanBase64);
-      const bytes = new Uint8Array(binaryString.length);
-      for (let i = 0; i < binaryString.length; i++) {
-        bytes[i] = binaryString.charCodeAt(i);
+      const win = window as unknown as PdfJsWindow;
+      if (!win.pdfjsLib) {
+        throw new Error('PDF library is still loading. Please try again.');
       }
 
-      const loadingTask = pdfjsLib.getDocument({ data: bytes });
+      const loadingTask = win.pdfjsLib.getDocument({ data: bytes });
       const pdf = await loadingTask.promise;
       const renderedImages: string[] = [];
 
@@ -112,6 +125,7 @@ export default function PdfToJpgPage() {
 
       setImages(renderedImages);
       setSuccess(true);
+      goToDownload();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to convert PDF to images');
     } finally {
@@ -119,28 +133,134 @@ export default function PdfToJpgPage() {
     }
   };
 
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes: string[] = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
 
   return (
-    <ToolPageShell title="PDF to JPG" description="Convert PDF pages to JPG images." icon={FileImage}>
-      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          {!file ? (
-            <ToolUploadZone
-              icon={Upload}
-              title="Click to upload or drag and drop a PDF file"
-              subtitle="Each page will be converted to a JPG image"
-              accept="application/pdf"
-              onFiles={(files) => handleFile(files?.[0] || null)}
-            />
-          ) : (
+    <ToolPageShell title="PDF to JPG" description="Convert PDF pages to JPG images." icon={Image}>
+      <div className="max-w-3xl mx-auto">
+        <StepIndicator currentStep={step} />
+
+        {step === 'upload' && (
+          <div className="space-y-6">
             <ToolCard>
-              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Selected File</h3>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl mb-6">
-                <span className="text-sm font-medium text-gray-700">{file.name}</span>
-                <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+              <div className="text-center mb-6">
+                <h2 className="font-display font-bold text-xl text-brand-dark mb-2">
+                  Upload Your PDF
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Select a PDF file to convert to JPG images
+                </p>
               </div>
 
-              <ToolPrimaryButton onClick={handleConvert} loading={isProcessing} disabled={!file}>
+              {!file ? (
+                <ToolUploadZone
+                  icon={Upload}
+                  title="Drop a PDF file here"
+                  subtitle="or click to browse from your computer"
+                  accept="application/pdf"
+                  onFiles={(files) => handleFile(files?.[0] || null)}
+                />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-green-50 border border-green-100 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      <span className="text-sm font-semibold text-green-700">
+                        {file.name}
+                      </span>
+                    </div>
+                    <span className="text-xs text-gray-500">
+                      {formatSize(file.size)}
+                    </span>
+                  </div>
+
+                  <button
+                    onClick={() => { setFile(null); setError(null); setImages([]); }}
+                    className="text-xs font-semibold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+                  >
+                    Remove and select another file
+                  </button>
+                </div>
+              )}
+
+              {error && (
+                <div className="mt-4">
+                  <ToolAlert type="error">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </ToolAlert>
+                </div>
+              )}
+            </ToolCard>
+
+            <div className="flex justify-end">
+              <ToolPrimaryButton
+                onClick={handleContinueToOptions}
+                disabled={!file}
+                className="min-w-[160px]"
+              >
+                Continue to Options
+                <Download className="w-4 h-4" />
+              </ToolPrimaryButton>
+            </div>
+          </div>
+        )}
+
+        {step === 'options' && (
+          <div className="space-y-6">
+            <ToolCard>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="font-display font-bold text-xl text-brand-dark mb-1">
+                    Ready to Convert
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Review your file and convert to images
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStep('upload')}
+                  className="text-xs font-semibold text-gray-500 hover:text-brand-red transition-colors cursor-pointer"
+                >
+                  ← Back to Upload
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                  <div className="p-3 bg-white border border-gray-100 rounded-xl text-brand-red">
+                    <Image className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-brand-dark truncate">
+                      {file?.name}
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {formatSize(file?.size || 0)}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                  <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    Each page of your PDF will be converted to a high-quality JPG image. You can download individual pages after conversion.
+                  </p>
+                </div>
+              </div>
+            </ToolCard>
+
+            <div className="flex justify-end gap-3">
+              <ToolSecondaryButton onClick={() => setStep('upload')}>
+                Back
+              </ToolSecondaryButton>
+              <ToolPrimaryButton onClick={handleConvert} loading={isProcessing}>
                 {isProcessing ? (
                   <>
                     <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
@@ -148,62 +268,61 @@ export default function PdfToJpgPage() {
                   </>
                 ) : (
                   <>
+                    <Image className="w-5 h-5 shrink-0" />
                     <span>Convert to Images</span>
-                    <Download className="w-5 h-5 shrink-0" />
                   </>
                 )}
               </ToolPrimaryButton>
-            </ToolCard>
-          )}
+            </div>
+          </div>
+        )}
 
-          {error && (
-            <ToolAlert type="error">
-              <AlertCircle className="w-4 h-4" />
-              {error}
-            </ToolAlert>
-          )}
+        {step === 'download' && (
+          <div className="space-y-6">
+            <ToolCard className="text-center py-12 sm:py-16">
+              <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="w-10 h-10 text-green-600" />
+              </div>
+              <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">
+                Converted to Images Successfully!
+              </h2>
+              <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">
+                Your PDF has been converted to {images.length} JPG image{images.length !== 1 ? 's' : ''}. Click on any image below to download it.
+              </p>
 
-          {success && (
-            <ToolAlert type="success">
-              <CheckCircle2 className="w-4 h-4" />
-              Converted {images.length} page(s) to images.
-            </ToolAlert>
-          )}
-
-
-          {images.length > 0 && (
-            <ToolCard>
-              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Converted Images</h3>
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                {images.map((src, index) => (
-                  <div key={index} className="relative">
-                    <img
-                      src={src}
-                      alt={`Page ${index + 1}`}
-                      className="w-full h-40 object-cover rounded-2xl border border-gray-100"
-                    />
+              {images.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-2xl mx-auto mb-8">
+                  {images.map((src, index) => (
                     <a
+                      key={index}
                       href={src}
                       download={`page-${index + 1}.jpg`}
-                      className="absolute inset-0 flex items-center justify-center bg-black/40 text-white font-medium opacity-0 hover:opacity-100 transition-opacity rounded-2xl"
+                      className="group relative"
                     >
-                      Download
+                      <img
+                        src={src}
+                        alt={`Page ${index + 1}`}
+                        className="w-full h-40 object-cover rounded-2xl border border-gray-100 group-hover:border-brand-red transition-colors"
+                      />
+                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
+                        Download
+                      </div>
                     </a>
-                  </div>
-                ))}
+                  ))}
+                </div>
+              )}
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
+                <ToolSecondaryButton onClick={resetAll} className="flex-1">
+                  <Upload className="w-5 h-5 shrink-0" />
+                  <span>Convert Another PDF</span>
+                </ToolSecondaryButton>
               </div>
             </ToolCard>
-          )}
-        </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
-          <div>
-            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Conversion Options</h3>
-            <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Convert each page of your PDF to a high-quality JPG image.
-            </p>
+            <RelatedTools currentTool="pdf-to-jpg" />
           </div>
-        </div>
+        )}
       </div>
     </ToolPageShell>
   );

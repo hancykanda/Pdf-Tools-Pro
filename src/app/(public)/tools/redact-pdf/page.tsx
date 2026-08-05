@@ -1,96 +1,96 @@
-"use client";
+'use client';
 
-import { useState } from "react";
-import { FileText, Upload, Download, CheckCircle2, AlertCircle, Trash2 } from "lucide-react";
+import { useState } from 'react';
+import { Shield, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
+import { useToolState } from '@/hooks/useToolState';
 import {
   ToolPageShell,
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
-    ToolSecondaryButton,
+  ToolSecondaryButton,
   ToolAlert,
-} from "@/components/layout/ToolPageShell";
+  StepIndicator,
+  RelatedTools,
+} from '@/components/layout';
 
-interface Region {
-  page: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
+export default function RedactPdfPage() {
+  const [pageNumber, setPageNumber] = useState(1);
+  const [xPosition, setXPosition] = useState(0);
+  const [yPosition, setYPosition] = useState(0);
+  const [width, setWidth] = useState(100);
+  const [height, setHeight] = useState(20);
+  const {
+    step,
+    setStep,
+    file,
+    setFile,
+    result,
+    setResult,
+    countdown,
+    setCountdown,
+    isProcessing,
+    setIsProcessing,
+    error,
+    setError,
+        setSuccess,
+    goToOptions,
+    goToDownload,
+    resetAll,
+  } = useToolState<Record<string, unknown>>();
 
-export default function RedactPDFPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [regions, setRegions] = useState<Region[]>([]);
-  const [page, setPage] = useState(1);
-  const [x, setX] = useState(100);
-  const [y, setY] = useState(100);
-  const [width, setWidth] = useState(200);
-  const [height, setHeight] = useState(30);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [resultData, setResultData] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
-
-  const handleFile = (selected: File | null) => {
-    if (selected) {
-      setFile(selected);
+  const handleFile = (selected: FileList | null) => {
+    const selectedFile = selected?.[0] || null;
+    if (selectedFile && selectedFile.type === 'application/pdf') {
+      setFile(selectedFile);
       setError(null);
       setSuccess(false);
-    setResultData(null);
-    setCountdown(0);
     } else {
-      setError("Please upload a file");
+      setError('Please upload a valid PDF file');
     }
   };
 
-  const addRegion = () => {
-    setRegions((prev) => [...prev, { page, x, y, width, height }]);
-    setPage(1);
-    setX(100);
-    setY(100);
-    setWidth(200);
-    setHeight(30);
+  const handleContinueToOptions = () => {
+    if (!file) {
+      setError('Please select a PDF file to continue');
+      return;
+    }
+    setError(null);
+    goToOptions();
   };
 
-  const removeRegion = (index: number) => {
-    setRegions((prev) => prev.filter((_, i) => i !== index));
-  };
-
-  const handleProcess = async () => {
-    if (!file || regions.length === 0) return;
+  const handleRedact = async () => {
+    if (!file) return;
     setIsProcessing(true);
     setError(null);
 
     try {
-      const reader = new FileReader();
-      reader.readAsDataURL(file);
-      reader.onload = async () => {
-        const base64 = reader.result as string;
-        const res = await fetch("/api/tools/redact-pdf", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ file: base64, regions }),
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.error || "Redact failed");
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.readAsDataURL(file);
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+      });
 
-        setResultData(data.dataUrl);
-        setSuccess(true);
-        startCountdown();
-      };
-      reader.onerror = () => {
-        setError("Failed to read file");
-        setIsProcessing(false);
-      };
+      const res = await fetch('/api/tools/redact-pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ file: base64, pageNumber, xPosition, yPosition, width, height }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Redaction failed');
+
+      setResult(data.dataUrl);
+      setSuccess(true);
+      startCountdown();
+      goToDownload();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Operation failed");
+      setError(err instanceof Error ? err.message : 'Failed to redact PDF');
     } finally {
       setIsProcessing(false);
     }
   };
-
 
   const startCountdown = () => {
     let remaining = 10;
@@ -106,9 +106,9 @@ export default function RedactPDFPage() {
   };
 
   const handleDownload = () => {
-    if (!resultData || countdown > 0) return;
+    if (!result || countdown > 0) return;
     const link = document.createElement('a');
-    link.href = resultData;
+    link.href = result;
     link.download = 'redacted.pdf';
     document.body.appendChild(link);
     link.click();
@@ -116,149 +116,232 @@ export default function RedactPDFPage() {
   };
 
   return (
-    <ToolPageShell title="Redact PDF" description="Permanently remove sensitive text from PDFs." icon={FileText}>
-      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          {!file ? (
-            <ToolUploadZone
-              icon={Upload}
-              title="Click to upload or drag and drop a file"
-              subtitle="Upload your file to get started"
-              accept="*/*"
-              onFiles={(files) => handleFile(files?.[0] || null)}
-            />
-          ) : (
+    <ToolPageShell title="Redact PDF" description="Permanently remove sensitive text from PDFs." icon={Shield}>
+      <div className="max-w-3xl mx-auto">
+        <StepIndicator currentStep={step} />
+
+        {step === 'upload' && (
+          <div className="space-y-6">
             <ToolCard>
-              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Selected File</h3>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                <span className="text-sm font-medium text-gray-700">{file.name}</span>
-                <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+              <div className="text-center mb-6">
+                <h2 className="font-display font-bold text-xl text-brand-dark mb-2">
+                  Upload Your PDF
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Select a PDF file to redact
+                </p>
               </div>
-            </ToolCard>
-          )}
 
-          {error && (
-            <ToolAlert type="error">
-              <AlertCircle className="w-4 h-4" />
-              {error}
-            </ToolAlert>
-          )}
-
-          {success && (
-            <ToolAlert type="success">
-              <CheckCircle2 className="w-4 h-4" />
-              Operation completed successfully!
-            </ToolAlert>
-          )}
-          {success && resultData && (
-            <ToolCard>
-              <div className="flex items-center justify-between">
-                <h3 className="font-display font-semibold text-lg text-brand-dark">Result</h3>
-                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
-                  <Download className="w-4 h-4" />
-                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
-                </ToolSecondaryButton>
-              </div>
-            </ToolCard>
-          )}
-
-          {regions.length > 0 && (
-            <ToolCard>
-              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Redaction Regions ({regions.length})</h3>
-              <div className="flex flex-col gap-2">
-                {regions.map((region, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-2xl">
-                    <span className="text-xs text-gray-600">
-                      Page {region.page}: x={region.x}, y={region.y}, w={region.width}, h={region.height}
-                    </span>
-                    <button
-                      onClick={() => removeRegion(index)}
-                      className="p-1.5 text-red-500 hover:text-red-700 hover:bg-white rounded-lg border border-transparent cursor-pointer"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+              {!file ? (
+                <ToolUploadZone
+                  icon={Upload}
+                  title="Drop a PDF file here"
+                  subtitle="or click to browse from your computer"
+                  accept="application/pdf"
+                  onFiles={handleFile}
+                />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-green-50 border border-green-100 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      <span className="text-sm font-semibold text-green-700">
+                        {file.name}
+                      </span>
+                    </div>
                   </div>
-                ))}
-              </div>
-            </ToolCard>
-          )}
-        </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
-          <div>
-            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Options</h3>
-            <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Permanently remove sensitive text from PDFs.
-            </p>
-            <div className="space-y-3">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Page</label>
-                  <input
-                    type="number"
-                    min={1}
-                    value={page}
-                    onChange={(e) => setPage(parseInt(e.target.value) || 1)}
-                    className="w-full px-3 py-2 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
-                  />
+                  <button
+                    onClick={() => { setFile(null); setError(null); }}
+                    className="text-xs font-semibold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
+                  >
+                    Remove and select another file
+                  </button>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">X</label>
-                  <input
-                    type="number"
-                    value={x}
-                    onChange={(e) => setX(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
-                  />
+              )}
+
+              {error && (
+                <div className="mt-4">
+                  <ToolAlert type="error">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </ToolAlert>
                 </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Y</label>
-                  <input
-                    type="number"
-                    value={y}
-                    onChange={(e) => setY(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Width</label>
-                  <input
-                    type="number"
-                    value={width}
-                    onChange={(e) => setWidth(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
-                  />
-                </div>
-                <div className="col-span-2">
-                  <label className="block text-xs font-semibold text-gray-500 mb-1">Height</label>
-                  <input
-                    type="number"
-                    value={height}
-                    onChange={(e) => setHeight(parseFloat(e.target.value) || 0)}
-                    className="w-full px-3 py-2 rounded-2xl border border-gray-200 text-sm focus:outline-none focus:border-brand-red transition-colors"
-                  />
-                </div>
-              </div>
-              <ToolPrimaryButton onClick={addRegion} disabled={!file} className="!bg-gray-700 hover:!bg-gray-800">
-                Add Region
+              )}
+            </ToolCard>
+
+            <div className="flex justify-end">
+              <ToolPrimaryButton
+                onClick={handleContinueToOptions}
+                disabled={!file}
+                className="min-w-[160px]"
+              >
+                Continue to Options
+                <Download className="w-4 h-4" />
               </ToolPrimaryButton>
             </div>
           </div>
+        )}
 
-          <ToolPrimaryButton onClick={handleProcess} disabled={!file || regions.length === 0} loading={isProcessing}>
-            {isProcessing ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                <span>Processing...</span>
-              </>
-            ) : (
-              <>
-                <span>Redact PDF</span>
-                <Download className="w-5 h-5 shrink-0" />
-              </>
-            )}
-          </ToolPrimaryButton>
-        </div>
+        {step === 'options' && (
+          <div className="space-y-6">
+            <ToolCard>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="font-display font-bold text-xl text-brand-dark mb-1">
+                    Redaction Settings
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Configure the redaction area for your PDF
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStep('upload')}
+                  className="text-xs font-semibold text-gray-500 hover:text-brand-red transition-colors cursor-pointer"
+                >
+                  ← Back to Upload
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                  <div className="p-3 bg-white border border-gray-100 rounded-xl text-brand-red">
+                    <Shield className="w-6 h-6" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-brand-dark truncate">
+                      {file?.name}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-700 mb-2">
+                      Page Number
+                    </label>
+                    <input
+                      type="number"
+                      value={pageNumber}
+                      onChange={(e) => setPageNumber(Number(e.target.value))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                      placeholder="1"
+                      min={1}
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-2">
+                        X Position
+                      </label>
+                      <input
+                        type="number"
+                        value={xPosition}
+                        onChange={(e) => setXPosition(Number(e.target.value))}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-2">
+                        Y Position
+                      </label>
+                      <input
+                        type="number"
+                        value={yPosition}
+                        onChange={(e) => setYPosition(Number(e.target.value))}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                        placeholder="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-2">
+                        Width
+                      </label>
+                      <input
+                        type="number"
+                        value={width}
+                        onChange={(e) => setWidth(Number(e.target.value))}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                        placeholder="100"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-700 mb-2">
+                        Height
+                      </label>
+                      <input
+                        type="number"
+                        value={height}
+                        onChange={(e) => setHeight(Number(e.target.value))}
+                        className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand-red focus:border-transparent"
+                        placeholder="20"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </ToolCard>
+
+            <div className="flex justify-end gap-3">
+              <ToolSecondaryButton onClick={() => setStep('upload')}>
+                Back
+              </ToolSecondaryButton>
+              <ToolPrimaryButton onClick={handleRedact} loading={isProcessing}>
+                {isProcessing ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>Redacting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Shield className="w-5 h-5 shrink-0" />
+                    <span>Redact PDF</span>
+                  </>
+                )}
+              </ToolPrimaryButton>
+            </div>
+          </div>
+        )}
+
+        {step === 'download' && (
+          <div className="space-y-6">
+            <ToolCard className="text-center py-12 sm:py-16">
+              <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="w-10 h-10 text-green-600" />
+              </div>
+              <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">
+                PDF Redacted Successfully!
+              </h2>
+              <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">
+                Your PDF has been redacted and is ready for download.
+              </p>
+
+              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
+                <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
+                  {countdown > 0 ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>Please wait {countdown}s...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5 shrink-0" />
+                      <span>Download PDF</span>
+                    </>
+                  )}
+                </ToolPrimaryButton>
+                <ToolSecondaryButton onClick={resetAll} className="flex-1">
+                  <Upload className="w-5 h-5 shrink-0" />
+                  <span>Redact Another</span>
+                </ToolSecondaryButton>
+              </div>
+            </ToolCard>
+
+            <RelatedTools currentTool="redact-pdf" />
+          </div>
+        )}
       </div>
     </ToolPageShell>
   );

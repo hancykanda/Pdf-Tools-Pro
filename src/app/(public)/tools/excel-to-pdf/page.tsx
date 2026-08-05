@@ -1,58 +1,80 @@
 'use client';
 
 import { useState } from 'react';
-import { FileText, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Table, Upload, Download, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { useToolState } from '@/hooks/useToolState';
 import {
   ToolPageShell,
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
-    ToolSecondaryButton,
+  ToolSecondaryButton,
   ToolAlert,
-} from '@/components/layout/ToolPageShell';
+  StepIndicator,
+  RelatedTools,
+} from '@/components/layout';
 
-export default function ExceltoPDFPage() {
-  const [file, setFile] = useState<File | null>(null);
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [resultData, setResultData] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
+export default function ExcelToPdfPage() {
+  const {
+    step,
+    setStep,
+    file,
+    setFile,
+    result,
+    setResult,
+    countdown,
+    setCountdown,
+    isProcessing,
+    setIsProcessing,
+    error,
+    setError,
+        setSuccess,
+    goToOptions,
+    goToDownload,
+    resetAll,
+  } = useToolState<Record<string, unknown>>();
 
-  const handleFile = (selected: File | null) => {
-    if (selected && (selected.name.endsWith('.xls') || selected.name.endsWith('.xlsx') || selected.name.endsWith('.csv'))) {
-      setFile(selected);
+  const handleFile = (selected: FileList | null) => {
+    const selectedFile = selected?.[0] || null;
+    const validTypes = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+    const validExt = selectedFile?.name.endsWith('.xls') || selectedFile?.name.endsWith('.xlsx');
+    if (selectedFile && (validTypes.includes(selectedFile.type) || validExt)) {
+      setFile(selectedFile);
       setError(null);
       setSuccess(false);
-    setResultData(null);
-    setCountdown(0);
     } else {
-      setError('Please upload a valid Excel file (.xls, .xlsx, or .csv)');
+      setError('Please upload a valid Excel file (.xls or .xlsx)');
     }
+  };
+
+  const handleContinueToOptions = () => {
+    if (!file) {
+      setError('Please select a file to continue');
+      return;
+    }
+    setError(null);
+    goToOptions();
   };
 
   const handleProcess = async () => {
     if (!file) return;
     setIsProcessing(true);
     setError(null);
-
     try {
       const formData = new FormData();
       formData.append('file', file);
-
       const res = await fetch('/api/tools/excel-to-pdf', {
         method: 'POST',
         body: formData,
       });
-
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Conversion failed');
-
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      setResultData(url);
+      setResult(url);
       setSuccess(true);
-      startCountdown();;
+      startCountdown();
+      goToDownload();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to convert Excel to PDF');
     } finally {
@@ -60,100 +82,130 @@ export default function ExceltoPDFPage() {
     }
   };
 
-
   const startCountdown = () => {
     let remaining = 10;
     setCountdown(remaining);
     const timer = setInterval(() => {
       remaining -= 1;
       setCountdown(remaining);
-      if (remaining <= 0) {
-        clearInterval(timer);
-      }
+      if (remaining <= 0) clearInterval(timer);
     }, 1000);
     return timer;
   };
 
   const handleDownload = () => {
-    if (!resultData || countdown > 0) return;
+    if (!result || countdown > 0) return;
     const link = document.createElement('a');
-    link.href = resultData;
+    link.href = result;
     link.download = 'converted.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
   };
 
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  };
+
   return (
-    <ToolPageShell title="Excel to PDF" description="Convert Excel spreadsheets to PDF format." icon={FileText}>
-      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          {!file ? (
-            <ToolUploadZone
-              icon={Upload}
-              title="Click to upload or drag and drop an Excel file"
-              subtitle="Supports .xls, .xlsx, and .csv files"
-              accept=".xls,.xlsx,.csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv"
-              onFiles={(files) => handleFile(files?.[0] || null)}
-            />
-          ) : (
+    <ToolPageShell title="Excel to PDF" description="Convert Excel spreadsheets to PDF format." icon={Table}>
+      <div className="max-w-3xl mx-auto">
+        <StepIndicator currentStep={step} />
+
+        {step === 'upload' && (
+          <div className="space-y-6">
             <ToolCard>
-              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Selected File</h3>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                <span className="text-sm font-medium text-gray-700">{file.name}</span>
-                <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+              <div className="text-center mb-6">
+                <h2 className="font-display font-bold text-xl text-brand-dark mb-2">Upload Your File</h2>
+                <p className="text-sm text-gray-500">Select a file to get started</p>
+              </div>
+              {!file ? (
+                <ToolUploadZone icon={Upload} title="Drop a file here" subtitle="or click to browse" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onFiles={handleFile} />
+              ) : (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between p-4 bg-green-50 border border-green-100 rounded-2xl">
+                    <div className="flex items-center gap-3">
+                      <CheckCircle2 className="w-5 h-5 text-green-600" />
+                      <span className="text-sm font-semibold text-green-700">{file.name}</span>
+                    </div>
+                    <span className="text-xs text-gray-500">{formatSize(file.size)}</span>
+                  </div>
+                  <button onClick={() => { setFile(null); setError(null); }} className="text-xs font-semibold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all cursor-pointer">Remove</button>
+                </div>
+              )}
+              {error && (
+                <div className="mt-4">
+                  <ToolAlert type="error">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </ToolAlert>
+                </div>
+              )}
+            </ToolCard>
+            <div className="flex justify-end">
+              <ToolPrimaryButton onClick={handleContinueToOptions} disabled={!file} className="min-w-[160px]">
+                Continue to Options <Download className="w-4 h-4" />
+              </ToolPrimaryButton>
+            </div>
+          </div>
+        )}
+
+        {step === 'options' && (
+          <div className="space-y-6">
+            <ToolCard>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="font-display font-bold text-xl text-brand-dark mb-1">Conversion Settings</h2>
+                  <p className="text-sm text-gray-500">Review your file and start processing</p>
+                </div>
+                <button onClick={() => setStep('upload')} className="text-xs font-semibold text-gray-500 hover:text-brand-red transition-colors cursor-pointer">← Back to Upload</button>
+              </div>
+              <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                <div className="p-3 bg-white border border-gray-100 rounded-xl text-brand-red"><Table className="w-6 h-6" /></div>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-brand-dark truncate">{file?.name}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{formatSize(file?.size || 0)}</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl mt-4">
+                <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-700 leading-relaxed">Ready to process your file. Click the button below to start.</p>
               </div>
             </ToolCard>
-          )}
+            <div className="flex justify-end gap-3">
+              <ToolSecondaryButton onClick={() => setStep('upload')}>Back</ToolSecondaryButton>
+              <ToolPrimaryButton onClick={handleProcess} loading={isProcessing}>
+                {isProcessing ? (<><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" /><span>Processing...</span></>) : (<><Table className="w-5 h-5 shrink-0" /><span>Convert to PDF</span></>)}
+              </ToolPrimaryButton>
+            </div>
+          </div>
+        )}
 
-          {error && (
-            <ToolAlert type="error">
-              <AlertCircle className="w-4 h-4" />
-              {error}
-            </ToolAlert>
-          )}
-
-          {success && (
-            <ToolAlert type="success">
-              <CheckCircle2 className="w-4 h-4" />
-              Excel converted to PDF successfully!
-            </ToolAlert>
-          )}
-          {success && resultData && (
-            <ToolCard>
-              <div className="flex items-center justify-between">
-                <h3 className="font-display font-semibold text-lg text-brand-dark">Result</h3>
-                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
-                  <Download className="w-4 h-4" />
-                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
+        {step === 'download' && (
+          <div className="space-y-6">
+            <ToolCard className="text-center py-12 sm:py-16">
+              <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="w-10 h-10 text-green-600" />
+              </div>
+              <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">Excel Converted Successfully!</h2>
+              <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">Your file has been processed and is ready for download.</p>
+              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
+                <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
+                  {countdown > 0 ? (<><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" /><span>Please wait {countdown}s...</span></>) : (<><Download className="w-5 h-5 shrink-0" /><span>Download</span></>)}
+                </ToolPrimaryButton>
+                <ToolSecondaryButton onClick={resetAll} className="flex-1">
+                  <Upload className="w-5 h-5 shrink-0" />
+                  <span>Process Another</span>
                 </ToolSecondaryButton>
               </div>
             </ToolCard>
-          )}
-        </div>
-
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
-          <div>
-            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Conversion Options</h3>
-            <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Convert your Excel spreadsheet to PDF format. The conversion preserves cell formatting and layout.
-            </p>
+            <RelatedTools currentTool="excel-to-pdf" />
           </div>
-
-          <ToolPrimaryButton onClick={handleProcess} disabled={!file} loading={isProcessing}>
-            {isProcessing ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                <span>Converting...</span>
-              </>
-            ) : (
-              <>
-                <span>Convert to PDF</span>
-                <Download className="w-5 h-5 shrink-0" />
-              </>
-            )}
-          </ToolPrimaryButton>
-        </div>
+        )}
       </div>
     </ToolPageShell>
   );

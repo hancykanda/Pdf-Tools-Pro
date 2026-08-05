@@ -1,38 +1,62 @@
 'use client';
 
 import { useState } from 'react';
-import { Upload, Download, CheckCircle2, AlertCircle, Globe } from 'lucide-react';
+import { Globe, Upload, Download, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { useToolState } from '@/hooks/useToolState';
 import {
   ToolPageShell,
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
-    ToolSecondaryButton,
+  ToolSecondaryButton,
   ToolAlert,
-} from '@/components/layout/ToolPageShell';
+  StepIndicator,
+  RelatedTools,
+} from '@/components/layout';
 
 export default function HTMLtoPDFPage() {
-  const [file, setFile] = useState<File | null>(null);
   const [htmlContent, setHtmlContent] = useState('');
-  const [isProcessing, setIsProcessing] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [success, setSuccess] = useState(false);
-  const [resultData, setResultData] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
+  const {
+    step,
+    setStep,
+    file,
+    setFile,
+    result,
+    setResult,
+    countdown,
+    setCountdown,
+    isProcessing,
+    setIsProcessing,
+    error,
+    setError,
+        setSuccess,
+    goToOptions,
+    goToDownload,
+    resetAll,
+  } = useToolState<Record<string, unknown>>();
 
   const handleFile = (selected: File | null) => {
     if (selected) {
       setFile(selected);
       setError(null);
       setSuccess(false);
-    setResultData(null);
-    setCountdown(0);
       const reader = new FileReader();
       reader.onload = (e) => {
         setHtmlContent(e.target?.result as string);
       };
       reader.readAsText(selected);
     }
+  };
+
+  const handleContinueToOptions = () => {
+    const hasFile = !!file;
+    const hasHtml = htmlContent.trim().length > 0;
+    if (!hasFile && !hasHtml) {
+      setError('Please upload an HTML file or enter HTML content');
+      return;
+    }
+    setError(null);
+    goToOptions();
   };
 
   const handleProcess = async () => {
@@ -56,16 +80,16 @@ export default function HTMLtoPDFPage() {
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
-      setResultData(url);
+      setResult(url);
       setSuccess(true);
-      startCountdown();;
+      startCountdown();
+      goToDownload();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to convert HTML to PDF');
     } finally {
       setIsProcessing(false);
     }
   };
-
 
   const startCountdown = () => {
     let remaining = 10;
@@ -81,101 +105,227 @@ export default function HTMLtoPDFPage() {
   };
 
   const handleDownload = () => {
-    if (!resultData || countdown > 0) return;
+    if (!result || countdown > 0) return;
     const link = document.createElement('a');
-    link.href = resultData;
+    link.href = result;
     link.download = 'converted.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(result);
+  };
+
+  const formatSize = (bytes: number) => {
+    if (bytes === 0) return '0 Bytes';
+    const k = 1024;
+    const sizes: string[] = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
     <ToolPageShell title="HTML to PDF" description="Convert webpages and HTML content to PDF." icon={Globe}>
-      <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
-        <div className="lg:col-span-2 flex flex-col gap-6">
-          {!file ? (
-            <ToolUploadZone
-              icon={Upload}
-              title="Click to upload or drag and drop an HTML file"
-              subtitle="Supports .html and .htm files, or paste HTML below"
-              accept=".html,.htm,text/html"
-              onFiles={(files) => handleFile(files?.[0] || null)}
-            />
-          ) : (
+      <div className="max-w-3xl mx-auto">
+        <StepIndicator currentStep={step} />
+
+        {step === 'upload' && (
+          <div className="space-y-6">
             <ToolCard>
-              <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Selected File</h3>
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                <span className="text-sm font-medium text-gray-700">{file.name}</span>
-                <span className="text-xs text-gray-500">{(file.size / (1024 * 1024)).toFixed(2)} MB</span>
+              <div className="text-center mb-6">
+                <h2 className="font-display font-bold text-xl text-brand-dark mb-2">
+                  Provide HTML Content
+                </h2>
+                <p className="text-sm text-gray-500">
+                  Upload an HTML file or paste HTML markup directly
+                </p>
+              </div>
+
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Upload HTML File</h3>
+                  {!file ? (
+                    <ToolUploadZone
+                      icon={Upload}
+                      title="Drop an HTML file here"
+                      subtitle="or click to browse (.html, .htm)"
+                      accept=".html,.htm,text/html"
+                      onFiles={(files) => handleFile(files?.[0] || null)}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-between p-4 bg-green-50 border border-green-100 rounded-2xl">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                        <span className="text-sm font-semibold text-green-700">
+                          {file.name}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-500">
+                        {formatSize(file.size)}
+                      </span>
+                    </div>
+                  )}
+                </div>
+
+                <div className="relative">
+                  <div className="absolute inset-0 flex items-center">
+                    <div className="w-full border-t border-gray-200" />
+                  </div>
+                  <div className="relative flex justify-center text-xs uppercase">
+                    <span className="bg-white px-3 text-gray-500">Or paste HTML below</span>
+                  </div>
+                </div>
+
+                <div>
+                  <textarea
+                    value={htmlContent}
+                    onChange={(e) => {
+                      setHtmlContent(e.target.value);
+                      setFile(null);
+                      setSuccess(false);
+                      setResult(null);
+                      setCountdown(0);
+                    }}
+                    placeholder="Paste your HTML content here..."
+                    className="w-full h-48 p-4 border border-gray-200 rounded-2xl text-sm text-gray-700 font-mono resize-none focus:outline-none focus:ring-2 focus:ring-brand-red/20 focus:border-brand-red transition-all"
+                  />
+                </div>
+              </div>
+
+              {error && (
+                <div className="mt-4">
+                  <ToolAlert type="error">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </ToolAlert>
+                </div>
+              )}
+            </ToolCard>
+
+            <div className="flex justify-end">
+              <ToolPrimaryButton
+                onClick={handleContinueToOptions}
+                className="min-w-[160px]"
+              >
+                Continue to Options
+                <Download className="w-4 h-4" />
+              </ToolPrimaryButton>
+            </div>
+          </div>
+        )}
+
+        {step === 'options' && (
+          <div className="space-y-6">
+            <ToolCard>
+              <div className="flex items-center justify-between mb-6">
+                <div>
+                  <h2 className="font-display font-bold text-xl text-brand-dark mb-1">
+                    Ready to Convert
+                  </h2>
+                  <p className="text-sm text-gray-500">
+                    Review your content and start conversion
+                  </p>
+                </div>
+                <button
+                  onClick={() => setStep('upload')}
+                  className="text-xs font-semibold text-gray-500 hover:text-brand-red transition-colors cursor-pointer"
+                >
+                  ← Back to Upload
+                </button>
+              </div>
+
+              <div className="space-y-6">
+                {file && (
+                  <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
+                    <div className="p-3 bg-white border border-gray-100 rounded-xl text-brand-red">
+                      <Globe className="w-6 h-6" />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-semibold text-brand-dark truncate">
+                        {file.name}
+                      </p>
+                      <p className="text-xs text-gray-500 mt-0.5">
+                        {formatSize(file.size)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {!file && htmlContent.trim() && (
+                  <div className="p-4 bg-gray-50 rounded-2xl">
+                    <p className="text-xs text-gray-500 mb-1">HTML Content Length</p>
+                    <p className="text-sm font-semibold text-brand-dark">
+                      {htmlContent.length} characters
+                    </p>
+                  </div>
+                )}
+
+                <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl">
+                  <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
+                  <p className="text-xs text-blue-700 leading-relaxed">
+                    Your HTML content will be converted to a PDF document. Make sure your HTML is well-formed for best results.
+                  </p>
+                </div>
               </div>
             </ToolCard>
-          )}
 
-          <ToolCard>
-            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">HTML Content</h3>
-            <textarea
-              value={htmlContent}
-              onChange={(e) => {
-                setHtmlContent(e.target.value);
-                setFile(null);
-                setSuccess(false);
-    setResultData(null);
-    setCountdown(0);
-              }}
-              placeholder="Paste your HTML content here, or upload an HTML file above..."
-              className="w-full h-64 p-4 border border-gray-200 rounded-2xl text-sm text-gray-700 font-mono resize-none focus:outline-none focus:ring-2 focus:ring-brand-red/20"
-            />
-          </ToolCard>
+            <div className="flex justify-end gap-3">
+              <ToolSecondaryButton onClick={() => setStep('upload')}>
+                Back
+              </ToolSecondaryButton>
+              <ToolPrimaryButton onClick={handleProcess} loading={isProcessing}>
+                {isProcessing ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>Converting...</span>
+                  </>
+                ) : (
+                  <>
+                    <Globe className="w-5 h-5 shrink-0" />
+                    <span>Convert to PDF</span>
+                  </>
+                )}
+              </ToolPrimaryButton>
+            </div>
+          </div>
+        )}
 
-          {error && (
-            <ToolAlert type="error">
-              <AlertCircle className="w-4 h-4" />
-              {error}
-            </ToolAlert>
-          )}
+        {step === 'download' && (
+          <div className="space-y-6">
+            <ToolCard className="text-center py-12 sm:py-16">
+              <div className="w-20 h-20 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-6">
+                <CheckCircle2 className="w-10 h-10 text-green-600" />
+              </div>
+              <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">
+                HTML Converted Successfully!
+              </h2>
+              <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">
+                Your HTML content has been converted to PDF. Download your file below.
+              </p>
 
-          {success && (
-            <ToolAlert type="success">
-              <CheckCircle2 className="w-4 h-4" />
-              HTML converted to PDF successfully!
-            </ToolAlert>
-          )}
-          {success && resultData && (
-            <ToolCard>
-              <div className="flex items-center justify-between">
-                <h3 className="font-display font-semibold text-lg text-brand-dark">Result</h3>
-                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
-                  <Download className="w-4 h-4" />
-                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
+              <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
+                <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
+                  {countdown > 0 ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <span>Please wait {countdown}s...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5 shrink-0" />
+                      <span>Download PDF</span>
+                    </>
+                  )}
+                </ToolPrimaryButton>
+                <ToolSecondaryButton onClick={resetAll} className="flex-1">
+                  <Upload className="w-5 h-5 shrink-0" />
+                  <span>Convert Another</span>
                 </ToolSecondaryButton>
               </div>
             </ToolCard>
-          )}
-        </div>
 
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between h-fit">
-          <div>
-            <h3 className="font-display font-semibold text-lg text-brand-dark mb-4">Conversion Options</h3>
-            <p className="text-gray-500 text-xs leading-relaxed mb-6 font-sans">
-              Convert HTML content to a PDF document. Upload an HTML file or paste HTML markup directly.
-            </p>
+            <RelatedTools currentTool="html-to-pdf" />
           </div>
-
-          <ToolPrimaryButton onClick={handleProcess} disabled={!htmlContent.trim()} loading={isProcessing}>
-            {isProcessing ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-                <span>Converting...</span>
-              </>
-            ) : (
-              <>
-                <span>Convert to PDF</span>
-                <Download className="w-5 h-5 shrink-0" />
-              </>
-            )}
-          </ToolPrimaryButton>
-        </div>
+        )}
       </div>
     </ToolPageShell>
   );
