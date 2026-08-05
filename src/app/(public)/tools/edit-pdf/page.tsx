@@ -7,6 +7,7 @@ import {
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
+    ToolSecondaryButton,
   ToolAlert,
 } from "@/components/layout/ToolPageShell";
 
@@ -56,14 +57,9 @@ export default function EditPDFPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Editing failed");
 
-      const link = document.createElement("a");
-      link.href = data.dataUrl;
-      link.download = "edited.pdf";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
+      setResultData(data.dataUrl);
       setSuccess(true);
+      startCountdown();;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to edit PDF");
     } finally {
@@ -89,7 +85,7 @@ export default function EditPDFPage() {
     if (!resultData || countdown > 0) return;
     const link = document.createElement('a');
     link.href = resultData;
-    link.download = 'result.pdf';
+    link.download = 'edited.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -127,8 +123,19 @@ export default function EditPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              PDF edited successfully! Your download should begin automatically.
+              PDF edited successfully!
             </ToolAlert>
+          )}
+          {success && resultData && (
+            <ToolCard>
+              <div className="flex items-center justify-between">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Result</h3>
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
+                  <Download className="w-4 h-4" />
+                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
+                </ToolSecondaryButton>
+              </div>
+            </ToolCard>
           )}
         </div>
 

@@ -7,6 +7,7 @@ import {
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
+    ToolSecondaryButton,
   ToolAlert,
 } from "@/components/layout/ToolPageShell";
 
@@ -53,14 +54,9 @@ export default function CropPDFPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Cropping failed");
 
-      const link = document.createElement("a");
-      link.href = data.dataUrl;
-      link.download = "cropped.pdf";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
+      setResultData(data.dataUrl);
       setSuccess(true);
+      startCountdown();;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to crop PDF");
     } finally {
@@ -90,7 +86,7 @@ export default function CropPDFPage() {
     if (!resultData || countdown > 0) return;
     const link = document.createElement('a');
     link.href = resultData;
-    link.download = 'result.pdf';
+    link.download = 'cropped.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -128,8 +124,19 @@ export default function CropPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              PDF cropped successfully! Your download should begin automatically.
+              PDF cropped successfully!
             </ToolAlert>
+          )}
+          {success && resultData && (
+            <ToolCard>
+              <div className="flex items-center justify-between">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Result</h3>
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
+                  <Download className="w-4 h-4" />
+                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
+                </ToolSecondaryButton>
+              </div>
+            </ToolCard>
           )}
         </div>
 

@@ -7,6 +7,7 @@ import {
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
+    ToolSecondaryButton,
   ToolAlert,
 } from "@/components/layout/ToolPageShell";
 
@@ -60,14 +61,9 @@ export default function ScantoPDFPage() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Conversion failed");
 
-      const link = document.createElement("a");
-      link.href = data.dataUrl;
-      link.download = "scanned.pdf";
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
+      setResultData(data.dataUrl);
       setSuccess(true);
+      startCountdown();;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : "Failed to convert images to PDF");
     } finally {
@@ -101,7 +97,7 @@ export default function ScantoPDFPage() {
     if (!resultData || countdown > 0) return;
     const link = document.createElement('a');
     link.href = resultData;
-    link.download = 'result.pdf';
+    link.download = 'scanned.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -192,8 +188,19 @@ export default function ScantoPDFPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              Images converted to PDF successfully! Your download should begin automatically.
+              Images converted to PDF successfully!
             </ToolAlert>
+          )}
+          {success && resultData && (
+            <ToolCard>
+              <div className="flex items-center justify-between">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Result</h3>
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
+                  <Download className="w-4 h-4" />
+                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
+                </ToolSecondaryButton>
+              </div>
+            </ToolCard>
           )}
         </div>
 

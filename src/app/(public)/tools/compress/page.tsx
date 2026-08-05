@@ -7,6 +7,7 @@ import {
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
+    ToolSecondaryButton,
   ToolAlert,
 } from '@/components/layout/ToolPageShell';
 
@@ -60,14 +61,9 @@ export default function CompressPage() {
       const estimatedSize = Math.floor((data.dataUrl.length - `data:application/pdf;base64,`.length) * 0.75);
       setCompressedSize(estimatedSize);
 
-      const link = document.createElement('a');
-      link.href = data.dataUrl;
-      link.download = 'compressed.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
+      setResultData(data.dataUrl);
       setSuccess(true);
+      startCountdown();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to compress PDF');
     } finally {
@@ -103,7 +99,7 @@ export default function CompressPage() {
     if (!resultData || countdown > 0) return;
     const link = document.createElement('a');
     link.href = resultData;
-    link.download = 'result.pdf';
+    link.download = 'compressed.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -150,8 +146,19 @@ export default function CompressPage() {
           {success && (
             <ToolAlert type="success">
               <CheckCircle2 className="w-4 h-4" />
-              PDF compressed successfully! Your download should begin automatically.
+              PDF compressed successfully!
             </ToolAlert>
+          )}
+          {success && resultData && (
+            <ToolCard>
+              <div className="flex items-center justify-between">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Result</h3>
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
+                  <Download className="w-4 h-4" />
+                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
+                </ToolSecondaryButton>
+              </div>
+            </ToolCard>
           )}
         </div>
 

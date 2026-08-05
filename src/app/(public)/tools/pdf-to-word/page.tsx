@@ -17,7 +17,6 @@ export default function PdfToWordPage() {
   const [isExtracting, setIsExtracting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [resultData, setResultData] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
 
   const handleFile = (selected: File | null) => {
@@ -26,8 +25,7 @@ export default function PdfToWordPage() {
       setText('');
       setError(null);
       setSuccess(false);
-    setResultData(null);
-    setCountdown(0);
+      setCountdown(0);
     } else {
       setError('Please upload a valid PDF file');
     }
@@ -58,6 +56,7 @@ export default function PdfToWordPage() {
 
       setText(data.text || '');
       setSuccess(true);
+      startCountdown();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to extract text from PDF');
     } finally {
@@ -66,7 +65,7 @@ export default function PdfToWordPage() {
   };
 
   const handleDownloadWord = () => {
-    if (!text) return;
+    if (!text || countdown > 0) return;
 
     const htmlContent = `
       <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
@@ -109,16 +108,6 @@ export default function PdfToWordPage() {
     return timer;
   };
 
-  const handleDownload = () => {
-    if (!resultData || countdown > 0) return;
-    const link = document.createElement('a');
-    link.href = resultData;
-    link.download = 'result.pdf';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <ToolPageShell title="PDF to Word" description="Extract text from PDF and download as Word document." icon={FileEdit} popular>
       <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -159,13 +148,14 @@ export default function PdfToWordPage() {
             </ToolAlert>
           )}
 
+
           {text && (
             <ToolCard>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-display font-semibold text-lg text-brand-dark">Extracted Text</h3>
-                <ToolSecondaryButton onClick={handleDownloadWord} className="!w-auto">
+                <ToolSecondaryButton onClick={handleDownloadWord} className="!w-auto" disabled={countdown > 0}>
                   <Download className="w-4 h-4" />
-                  Download Word
+                  {countdown > 0 ? `Wait ${countdown}s` : 'Download Word'}
                 </ToolSecondaryButton>
               </div>
               <div className="bg-gray-50 rounded-2xl p-4 max-h-96 overflow-y-auto">

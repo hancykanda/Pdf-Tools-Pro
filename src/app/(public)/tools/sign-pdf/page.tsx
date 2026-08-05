@@ -7,6 +7,7 @@ import {
   ToolCard,
   ToolUploadZone,
   ToolPrimaryButton,
+    ToolSecondaryButton,
   ToolAlert,
 } from "@/components/layout/ToolPageShell";
 
@@ -50,13 +51,9 @@ export default function SignPDFPage() {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Sign failed");
 
-        const link = document.createElement("a");
-        link.href = data.dataUrl;
-        link.download = data.filename || "signed.pdf";
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+        setResultData(data.dataUrl);
         setSuccess(true);
+        startCountdown();
       };
       reader.onerror = () => {
         setError("Failed to read file");
@@ -87,7 +84,7 @@ export default function SignPDFPage() {
     if (!resultData || countdown > 0) return;
     const link = document.createElement('a');
     link.href = resultData;
-    link.download = 'result.pdf';
+    link.download = 'signed.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -127,6 +124,17 @@ export default function SignPDFPage() {
               <CheckCircle2 className="w-4 h-4" />
               Operation completed successfully!
             </ToolAlert>
+          )}
+          {success && resultData && (
+            <ToolCard>
+              <div className="flex items-center justify-between">
+                <h3 className="font-display font-semibold text-lg text-brand-dark">Result</h3>
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
+                  <Download className="w-4 h-4" />
+                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
+                </ToolSecondaryButton>
+              </div>
+            </ToolCard>
           )}
         </div>
 

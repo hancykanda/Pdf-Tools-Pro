@@ -40,8 +40,7 @@ export default function PdfToJpgPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
-  const [resultData, setResultData] = useState<string | null>(null);
-  const [countdown, setCountdown] = useState(0);
+
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -66,8 +65,6 @@ export default function PdfToJpgPage() {
       setImages([]);
       setError(null);
       setSuccess(false);
-    setResultData(null);
-    setCountdown(0);
     } else {
       setError('Please upload a valid PDF file');
     }
@@ -123,29 +120,6 @@ export default function PdfToJpgPage() {
   };
 
 
-  const startCountdown = () => {
-    let remaining = 10;
-    setCountdown(remaining);
-    const timer = setInterval(() => {
-      remaining -= 1;
-      setCountdown(remaining);
-      if (remaining <= 0) {
-        clearInterval(timer);
-      }
-    }, 1000);
-    return timer;
-  };
-
-  const handleDownload = () => {
-    if (!resultData || countdown > 0) return;
-    const link = document.createElement('a');
-    link.href = resultData;
-    link.download = 'result.pdf';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
-
   return (
     <ToolPageShell title="PDF to JPG" description="Convert PDF pages to JPG images." icon={FileImage}>
       <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -195,6 +169,7 @@ export default function PdfToJpgPage() {
               Converted {images.length} page(s) to images.
             </ToolAlert>
           )}
+
 
           {images.length > 0 && (
             <ToolCard>
