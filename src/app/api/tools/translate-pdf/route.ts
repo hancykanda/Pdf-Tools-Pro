@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { PDFParse } from 'pdf-parse';
+import { extractPdfText } from '@/lib/pdfText';
 import { generateWithGemini } from '@/lib/gemini';
 
 export const dynamic = 'force-dynamic';
@@ -15,10 +15,7 @@ export async function POST(request: NextRequest) {
 
     const cleanBase64 = pdfBase64.split(',')[1] || pdfBase64;
     const buffer = Buffer.from(cleanBase64, 'base64');
-    const parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
-
-    const text = result.text || 'No text could be extracted from this PDF.';
+    const text = (await extractPdfText(buffer)) || 'No text could be extracted from this PDF.';
 
     if (text === 'No text could be extracted from this PDF.') {
       return Response.json({ translatedText: text });

@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function JpgToPdfPage() {
   const [files, setFiles] = useState<File[]>([]);
@@ -119,6 +121,8 @@ export default function JpgToPdfPage() {
     <ToolPageShell title="JPG to PDF" description="Convert JPG, PNG, and WebP images to PDF." icon={Image}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
           <div className="space-y-6">
@@ -298,7 +302,7 @@ export default function JpgToPdfPage() {
               <ToolPrimaryButton onClick={handleConvert} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Converting...</span>
                   </>
                 ) : (
@@ -329,7 +333,7 @@ export default function JpgToPdfPage() {
                 <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
                   {countdown > 0 ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
                       <span>Please wait {countdown}s...</span>
                     </>
                   ) : (
@@ -350,6 +354,7 @@ export default function JpgToPdfPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

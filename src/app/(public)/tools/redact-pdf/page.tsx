@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function RedactPdfPage() {
   const [pageNumber, setPageNumber] = useState(1);
@@ -119,6 +121,8 @@ export default function RedactPdfPage() {
     <ToolPageShell title="Redact PDF" description="Permanently remove sensitive text from PDFs." icon={Shield}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
           <div className="space-y-6">
@@ -291,7 +295,7 @@ export default function RedactPdfPage() {
               <ToolPrimaryButton onClick={handleRedact} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Redacting...</span>
                   </>
                 ) : (
@@ -322,7 +326,7 @@ export default function RedactPdfPage() {
                 <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
                   {countdown > 0 ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
                       <span>Please wait {countdown}s...</span>
                     </>
                   ) : (
@@ -343,6 +347,7 @@ export default function RedactPdfPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

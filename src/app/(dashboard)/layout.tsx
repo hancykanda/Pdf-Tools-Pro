@@ -24,14 +24,14 @@ import {
 
 const navigation = [
   { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard },
-  { name: 'AI PDF Editor', href: '/dashboard/ai-editor', icon: BrainCircuit, premium: true },
-  { name: 'Exam Header Customizer', href: '/dashboard/exam-header', icon: Award, premium: true },
-  { name: 'OCR + Organize PDF', href: '/dashboard/ocr-organize', icon: FileText, premium: true },
-  { name: 'Question Bank', href: '/dashboard/questions', icon: FileQuestion, premium: true },
-  { name: 'Papers Bank', href: '/dashboard/papers', icon: BookOpen, premium: true },
-  { name: 'Exam Generator', href: '/dashboard/exam-generator', icon: ClipboardList, premium: true },
-  { name: 'Lesson Plans', href: '/dashboard/lesson-plans', icon: GraduationCap, premium: true },
-  { name: 'Settings', href: '/dashboard/settings', icon: Settings },
+  { name: 'AI PDF Editor', href: '/ai-editor', icon: BrainCircuit, premium: true },
+  { name: 'Exam Header Customizer', href: '/exam-header', icon: Award, premium: true },
+  { name: 'OCR + Organize PDF', href: '/ocr-organize', icon: FileText, premium: true },
+  { name: 'Question Bank', href: '/questions', icon: FileQuestion, premium: true },
+  { name: 'Papers Bank', href: '/papers', icon: BookOpen, premium: true },
+  { name: 'Exam Generator', href: '/exam-generator', icon: ClipboardList, premium: true },
+  { name: 'Lesson Plans', href: '/lesson-plans', icon: GraduationCap, premium: true },
+  { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -124,11 +124,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
                 <>
                   <div className="fixed inset-0 z-10" onClick={() => setUserMenuOpen(false)} />
                   <div className="absolute bottom-full left-0 right-0 mb-2 bg-white rounded-xl border border-gray-200 shadow-lg py-2 z-20">
-                    <Link
-                      href="/dashboard/settings"
-                      className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                      onClick={() => setUserMenuOpen(false)}
-                    >
+                      <Link
+                        href="/settings"
+                        className="flex items-center gap-3 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50"
+                        onClick={() => setUserMenuOpen(false)}
+                      >
                       <Settings className="w-4 h-4" />
                       Settings
                     </Link>

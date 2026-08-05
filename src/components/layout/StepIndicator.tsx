@@ -30,18 +30,18 @@ export function StepIndicator({
 
   return (
     <div className="w-full mb-8">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-center max-w-md mx-auto">
         {steps.map((step, index) => {
           const isActive = step.key === currentStep;
           const isCompleted = index < currentIndex;
           const Icon = step.icon;
 
           return (
-            <div key={step.key} className="flex-1 flex items-center">
-              <div className="flex flex-col items-center gap-2">
+            <div key={step.key} className="flex items-center">
+              <div className="flex w-20 flex-col items-center gap-2">
                 <div
                   className={`
-                    w-10 h-10 rounded-full flex items-center justify-center transition-all
+                    w-10 h-10 rounded-full flex items-center justify-center transition-all duration-300
                     ${isActive ? 'bg-brand-red text-white shadow-lg shadow-red-500/20 scale-110' : ''}
                     ${isCompleted ? 'bg-green-50 text-green-600' : ''}
                     ${!isActive && !isCompleted ? 'bg-gray-100 text-gray-400' : ''}
@@ -62,7 +62,7 @@ export function StepIndicator({
               </div>
 
               {index < steps.length - 1 && (
-                <div className="flex-1 mx-4 h-0.5 bg-gray-200 relative">
+                <div className="mx-1 h-0.5 w-10 bg-gray-200 relative sm:mx-2 sm:w-16">
                   <div
                     className="absolute inset-y-0 left-0 bg-brand-red transition-all duration-300"
                     style={{ width: isCompleted || isActive ? '100%' : '0%' }}

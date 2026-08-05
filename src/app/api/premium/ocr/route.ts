@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { uploadFile } from '@/lib/minio';
 import { enqueuePremiumJob, type PremiumJobData } from '@/lib/queue';
+import '@/lib/premiumWorker';
 import { generateWithGemini } from '@/lib/gemini';
 
 export const dynamic = 'force-dynamic';

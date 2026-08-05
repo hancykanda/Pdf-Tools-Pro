@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 interface PdfJsPage {
   getViewport(opts: { scale: number }): { height: number; width: number };
@@ -145,6 +147,8 @@ export default function PdfToJpgPage() {
     <ToolPageShell title="PDF to JPG" description="Convert PDF pages to JPG images." icon={Image}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
           <div className="space-y-6">
@@ -263,7 +267,7 @@ export default function PdfToJpgPage() {
               <ToolPrimaryButton onClick={handleConvert} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Converting...</span>
                   </>
                 ) : (
@@ -324,6 +328,7 @@ export default function PdfToJpgPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

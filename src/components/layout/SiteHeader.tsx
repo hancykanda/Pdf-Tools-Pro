@@ -1,16 +1,8 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState } from 'react';
 import Link from 'next/link';
-import { FileText, ChevronDown, Menu, X } from 'lucide-react';
-
-const navCategories = [
-  { name: 'Organize', href: '/tools#organize' },
-  { name: 'Optimize', href: '/tools#optimize' },
-  { name: 'Convert', href: '/tools#convert' },
-  { name: 'Edit', href: '/tools#edit' },
-  { name: 'Security', href: '/tools#security' },
-];
+import { FileText, Menu, X } from 'lucide-react';
 
 const navLinks = [
   { name: 'Pricing', href: '/pricing' },
@@ -18,19 +10,7 @@ const navLinks = [
 ];
 
 export default function SiteHeader() {
-  const [toolsOpen, setToolsOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const toolsDropdownRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    function handleClickOutside(event: MouseEvent) {
-      if (toolsDropdownRef.current && !toolsDropdownRef.current.contains(event.target as Node)) {
-        setToolsOpen(false);
-      }
-    }
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
 
   return (
     <header className="sticky top-0 z-50 bg-white/95 backdrop-blur border-b border-gray-100">
@@ -45,38 +25,6 @@ export default function SiteHeader() {
 
         {/* Desktop Navigation */}
         <nav className="hidden md:flex items-center gap-1">
-          {/* All Tools Dropdown */}
-          <div
-            ref={toolsDropdownRef}
-            className="relative"
-            onMouseEnter={() => setToolsOpen(true)}
-            onMouseLeave={() => setToolsOpen(false)}
-          >
-            <button
-              type="button"
-              className="flex items-center gap-1 px-3 py-2 text-sm font-medium text-gray-700 hover:text-orange-500 transition-colors rounded-lg hover:bg-orange-50"
-            >
-              All Tools
-              <ChevronDown className={`w-4 h-4 transition-transform ${toolsOpen ? 'rotate-180' : ''}`} />
-            </button>
-
-            {toolsOpen && (
-              <div className="absolute top-full left-0 mt-2 w-56 bg-white rounded-xl border border-gray-100 shadow-lg py-2 z-50">
-                {navCategories.map((category) => (
-                  <Link
-                    key={category.name}
-                    href={category.href}
-                    className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                    onClick={() => setToolsOpen(false)}
-                  >
-                    {category.name}
-                  </Link>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Simple Nav Links */}
           {navLinks.map((link) => (
             <Link
               key={link.name}
@@ -119,21 +67,6 @@ export default function SiteHeader() {
       {mobileOpen && (
         <div className="md:hidden bg-white border-t border-gray-100">
           <div className="px-4 py-4 space-y-1">
-            {/* Categories */}
-            {navCategories.map((category) => (
-              <Link
-                key={category.name}
-                href={category.href}
-                className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-orange-50 hover:text-orange-600 transition-colors"
-                onClick={() => setMobileOpen(false)}
-              >
-                {category.name}
-              </Link>
-            ))}
-
-            {/* Divider */}
-            <div className="my-3 border-t border-gray-100" />
-
             {/* Simple Links */}
             {navLinks.map((link) => (
               <Link

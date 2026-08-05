@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { PDFParse } from 'pdf-parse';
+import { extractPdfText } from '@/lib/pdfText';
 
 export const dynamic = 'force-dynamic';
 
@@ -40,14 +40,10 @@ export async function POST(request: NextRequest) {
     const cleanBase64 = (base64: string) => base64.split(',')[1] || base64;
 
     const buffer1 = Buffer.from(cleanBase64(file1), 'base64');
-    const parser1 = new PDFParse({ data: buffer1 });
-    const result1 = await parser1.getText();
-    const text1 = result1.text || '';
+    const text1 = (await extractPdfText(buffer1)) || '';
 
     const buffer2 = Buffer.from(cleanBase64(file2), 'base64');
-    const parser2 = new PDFParse({ data: buffer2 });
-    const result2 = await parser2.getText();
-    const text2 = result2.text || '';
+    const text2 = (await extractPdfText(buffer2)) || '';
 
     const diff = computeSimpleDiff(text1, text2);
 

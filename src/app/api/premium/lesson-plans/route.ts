@@ -78,3 +78,25 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Failed to create lesson plan' }, { status: 500 });
   }
 }
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    }
+
+    await prisma.lessonPlan.delete({ where: { id, userId: user.id } });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('Lesson plans DELETE error:', error);
+    return NextResponse.json({ error: 'Failed to delete lesson plan' }, { status: 500 });
+  }
+}

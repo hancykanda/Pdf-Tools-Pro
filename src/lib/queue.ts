@@ -2,7 +2,8 @@ import { Queue, Worker, Job } from 'bullmq';
 import Redis from 'ioredis';
 
 const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
-const connection = new Redis(redisUrl);
+// BullMQ requires maxRetriesPerRequest to be null on the connection.
+const connection = new Redis(redisUrl, { maxRetriesPerRequest: null });
 
 export const premiumQueue = new Queue('premium-jobs', { connection });
 
@@ -19,8 +20,8 @@ export async function enqueuePremiumJob(
       type: 'exponential',
       delay: 2000,
     },
-    removeOnComplete: true,
-    removeOnFail: false,
+    removeOnComplete: { age: 3600 },
+    removeOnFail: { age: 3600 },
   });
   return job.id as string;
 }

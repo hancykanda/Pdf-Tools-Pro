@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function OCRPDFPage() {
   const {
@@ -20,7 +22,11 @@ export default function OCRPDFPage() {
     setStep,
     file,
     setFile,
-                    isProcessing,
+    result,
+    setResult,
+    countdown,
+    setCountdown,
+    isProcessing,
     setIsProcessing,
     error,
     setError,
@@ -68,16 +74,44 @@ export default function OCRPDFPage() {
         body: JSON.stringify({ file: base64, filename: file.name }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'OCR request failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'OCR request failed');
+      }
 
+      const blob = await res.blob();
+      setResult(URL.createObjectURL(blob));
       setSuccess(true);
+      startCountdown();
       goToDownload();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to process OCR request');
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const startCountdown = () => {
+    let remaining = 10;
+    setCountdown(remaining);
+    const timer = setInterval(() => {
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+    return timer;
+  };
+
+  const handleDownload = () => {
+    if (!result || countdown > 0) return;
+    const link = document.createElement('a');
+    link.href = result;
+    link.download = `${(file?.name || 'document').replace(/\.[^/.]+$/, '')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   };
 
   const formatSize = (bytes: number) => {
@@ -92,6 +126,8 @@ export default function OCRPDFPage() {
     <ToolPageShell title="OCR PDF" description="Make scanned PDFs searchable and selectable." icon={Scan}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
           <div className="space-y-6">
@@ -210,7 +246,7 @@ export default function OCRPDFPage() {
               <ToolPrimaryButton onClick={handleProcess} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Processing...</span>
                   </>
                 ) : (
@@ -231,20 +267,33 @@ export default function OCRPDFPage() {
                 <CheckCircle2 className="w-10 h-10 text-green-600" />
               </div>
               <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">
-                OCR Processing Complete!
+                Text Extraction Complete!
               </h2>
               <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">
-                Your PDF has been validated and is ready for OCR processing.
+                The text embedded in your PDF has been extracted to a text file. Download it below.
               </p>
 
-              <div className="flex items-center justify-center gap-2 p-4 bg-amber-50 border border-amber-100 rounded-2xl max-w-md mx-auto mb-8">
-                <Crown className="w-5 h-5 text-amber-600" />
+              <div className="flex items-start gap-2 p-4 bg-amber-50 border border-amber-100 rounded-2xl max-w-md mx-auto mb-8 text-left">
+                <Crown className="w-5 h-5 text-amber-600 shrink-0" />
                 <p className="text-sm text-amber-700">
-                  Full OCR processing is available on our premium plan.
+                  Only text already present in the PDF is extracted. Image-only scans need an OCR engine, which is not available here.
                 </p>
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
+                <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
+                  {countdown > 0 ? (
+                    <>
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
+                      <span>Please wait {countdown}s...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5 shrink-0" />
+                      <span>Download Text</span>
+                    </>
+                  )}
+                </ToolPrimaryButton>
                 <ToolSecondaryButton onClick={resetAll} className="flex-1">
                   <Upload className="w-5 h-5 shrink-0" />
                   <span>Process Another</span>
@@ -256,6 +305,7 @@ export default function OCRPDFPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

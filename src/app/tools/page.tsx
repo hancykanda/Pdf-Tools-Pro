@@ -124,20 +124,20 @@ export default function ToolsPage() {
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
                 {category.tools.map((tool) => (
                   <Link
                     key={tool.name}
                     href={tool.href}
-                    className="block bg-white rounded-2xl border border-gray-200 p-6 transition-all duration-200 hover:border-gray-400 hover:shadow-sm"
+                    className="block bg-white rounded-2xl border border-gray-200 p-5 transition-all duration-200 hover:border-gray-400 hover:shadow-sm"
                   >
-                    <div className="mb-4">
+                    <div className="mb-3">
                       <tool.icon />
                     </div>
                     <h3 className="text-lg font-bold text-gray-900 mb-1">
                       {tool.name}
                     </h3>
-                    <p className="text-sm text-gray-500 leading-relaxed line-clamp-2">
+                    <p className="text-sm text-gray-500 leading-snug line-clamp-2">
                       {tool.description}
                     </p>
                   </Link>

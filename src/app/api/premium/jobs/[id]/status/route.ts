@@ -24,5 +24,5 @@ export async function GET(
     return NextResponse.json({ error: 'Job not found' }, { status: 404 });
   }
 
-  return NextResponse.json({ job: status });
+  return NextResponse.json({ ...status, job: status });
 }

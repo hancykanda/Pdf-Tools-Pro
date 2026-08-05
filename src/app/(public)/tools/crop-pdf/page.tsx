@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function CropPdfPage() {
   const [top, setTop] = useState(0);
@@ -118,6 +120,8 @@ export default function CropPdfPage() {
     <ToolPageShell title="Crop PDF" description="Crop margins and adjust page boundaries in PDFs." icon={Crop}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
           <div className="space-y-6">
@@ -276,7 +280,7 @@ export default function CropPdfPage() {
               <ToolPrimaryButton onClick={handleCrop} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Cropping...</span>
                   </>
                 ) : (
@@ -307,7 +311,7 @@ export default function CropPdfPage() {
                 <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
                   {countdown > 0 ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
                       <span>Please wait {countdown}s...</span>
                     </>
                   ) : (
@@ -328,6 +332,7 @@ export default function CropPdfPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

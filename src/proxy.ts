@@ -1,15 +1,27 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/auth';
 
+const premiumPages = [
+  '/dashboard',
+  '/ai-editor',
+  '/exam-header',
+  '/ocr-organize',
+  '/questions',
+  '/papers',
+  '/exam-generator',
+  '/lesson-plans',
+  '/settings',
+];
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  if (pathname.startsWith('/dashboard')) {
-    return handleDashboard(request);
-  }
-
   if (pathname.startsWith('/api/premium')) {
     return handlePremiumApi(request);
+  }
+
+  if (premiumPages.some((p) => pathname === p || pathname.startsWith(p + '/'))) {
+    return handleDashboard(request);
   }
 
   return NextResponse.next();
@@ -46,5 +58,16 @@ async function handlePremiumApi(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/dashboard/:path*', '/api/premium/:path*'],
+  matcher: [
+    '/api/premium/:path*',
+    '/dashboard/:path*',
+    '/ai-editor/:path*',
+    '/exam-header/:path*',
+    '/ocr-organize/:path*',
+    '/questions/:path*',
+    '/papers/:path*',
+    '/exam-generator/:path*',
+    '/lesson-plans/:path*',
+    '/settings/:path*',
+  ],
 };

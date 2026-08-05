@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function ComparePDFPage() {
   const [file1, setFile1] = useState<File | null>(null);
@@ -115,6 +117,8 @@ export default function ComparePDFPage() {
     <ToolPageShell title="Compare PDF" description="Find differences between two PDF documents." icon={GitCompare}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
           <div className="space-y-6">
@@ -276,7 +280,7 @@ export default function ComparePDFPage() {
               <ToolPrimaryButton onClick={handleCompare} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Comparing...</span>
                   </>
                 ) : (
@@ -342,6 +346,7 @@ export default function ComparePDFPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

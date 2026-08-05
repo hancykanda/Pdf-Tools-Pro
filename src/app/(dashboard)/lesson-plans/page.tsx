@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { GraduationCap, Plus, Trash2, Sparkles, Loader2 } from 'lucide-react';
-import { PageContainer, Section, PageHeader, Card, ActionButton } from '@/components/layout/PageShell';
+import { PageContainer, Section, PageHeader, Card, ActionButton, Alert } from '@/components/layout/PageShell';
 
 type LessonPlan = {
   id: string;
@@ -14,82 +14,96 @@ type LessonPlan = {
   aiGenerated: boolean;
 };
 
-const samplePlans: LessonPlan[] = [
-  {
-    id: '1',
-    title: 'Introduction to Photosynthesis',
-    subject: 'Biology',
-    classLevel: 'Grade 7',
-    topic: 'Plants',
-    durationMinutes: 45,
-    aiGenerated: false,
-  },
-];
+const emptyForm = {
+  title: '',
+  subject: '',
+  classLevel: '',
+  topic: '',
+  durationMinutes: '45',
+};
 
 export default function LessonPlansPage() {
-  const [plans, setPlans] = useState<LessonPlan[]>(samplePlans);
+  const [plans, setPlans] = useState<LessonPlan[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
   const [generating, setGenerating] = useState(false);
-  const [formData, setFormData] = useState({
-    title: '',
-    subject: '',
-    classLevel: '',
-    topic: '',
-    durationMinutes: '45',
-  });
+  const [formData, setFormData] = useState(emptyForm);
 
-  const handleAdd = () => {
-    if (!formData.title.trim() || !formData.subject.trim() || !formData.topic.trim()) return;
-    const newPlan: LessonPlan = {
-      id: Date.now().toString(),
-      ...formData,
-      durationMinutes: Number(formData.durationMinutes),
-      aiGenerated: false,
+  const loadPlans = useCallback(async () => {
+    try {
+      const res = await fetch('/api/premium/lesson-plans');
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to load lesson plans');
+      setPlans(Array.isArray(data.items) ? data.items : []);
+      setError('');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load lesson plans');
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    const run = async () => {
+      await loadPlans();
     };
-    setPlans([newPlan, ...plans]);
-    setFormData({
-      title: '',
-      subject: '',
-      classLevel: '',
-      topic: '',
-      durationMinutes: '45',
-    });
-    setShowForm(false);
-  };
+    run();
+  }, [loadPlans]);
 
-  const handleAIGenerate = async () => {
-    if (!formData.title.trim() || !formData.subject.trim() || !formData.topic.trim()) return;
-    setGenerating(true);
+  const createPlan = async (aiGenerated: boolean) => {
+    if (!formData.title.trim() || !formData.subject.trim() || !formData.topic.trim() || !formData.classLevel.trim()) {
+      setError('Title, subject, class level and topic are required.');
+      return;
+    }
+    setError('');
+    if (aiGenerated) setGenerating(true);
+    else setSaving(true);
+
     try {
       const res = await fetch('/api/premium/lesson-plans', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           ...formData,
-          aiGenerated: true,
+          durationMinutes: Number(formData.durationMinutes) || 45,
+          aiGenerated,
         }),
       });
 
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Generation failed');
+      if (!res.ok) throw new Error(data.error || (aiGenerated ? 'Generation failed' : 'Failed to save lesson plan'));
 
-      const newPlan: LessonPlan = {
-        id: Date.now().toString(),
-        ...formData,
-        durationMinutes: Number(formData.durationMinutes),
-        aiGenerated: true,
-      };
-      setPlans([newPlan, ...plans]);
+      setPlans((prev) => [data.lessonPlan as LessonPlan, ...prev]);
+      setFormData(emptyForm);
       setShowForm(false);
     } catch (err: unknown) {
-      console.error('AI generation failed:', err);
+      setError(err instanceof Error ? err.message : 'Failed to save lesson plan');
     } finally {
       setGenerating(false);
+      setSaving(false);
     }
   };
 
-  const handleDelete = (id: string) => {
-    setPlans(plans.filter((p) => p.id !== id));
+  const handleAdd = () => {
+    createPlan(false);
+  };
+
+  const handleAIGenerate = () => {
+    createPlan(true);
+  };
+
+  const handleDelete = async (id: string) => {
+    setError('');
+    try {
+      const res = await fetch(`/api/premium/lesson-plans?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to delete lesson plan');
+      setPlans((prev) => prev.filter((p) => p.id !== id));
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to delete lesson plan');
+    }
   };
 
   return (
@@ -108,6 +122,12 @@ export default function LessonPlansPage() {
               New Plan
             </button>
           </div>
+
+          {error && (
+            <div className="mb-4">
+              <Alert>{error}</Alert>
+            </div>
+          )}
 
           {showForm && (
             <div className="bg-gray-50 rounded-2xl p-6 mb-6">
@@ -160,11 +180,20 @@ export default function LessonPlansPage() {
               </div>
 
               <div className="flex gap-3">
-                <ActionButton onClick={handleAdd} className="flex-1">
-                  <Plus className="w-5 h-5" />
-                  Save Plan
+                <ActionButton onClick={handleAdd} disabled={saving || generating} className="flex-1">
+                  {saving ? (
+                    <>
+                      <Loader2 className="w-5 h-5 animate-spin" />
+                      Saving...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="w-5 h-5" />
+                      Save Plan
+                    </>
+                  )}
                 </ActionButton>
-                <ActionButton onClick={handleAIGenerate} disabled={generating} className="flex-1">
+                <ActionButton onClick={handleAIGenerate} disabled={generating || saving} className="flex-1">
                   {generating ? (
                     <>
                       <Loader2 className="w-5 h-5 animate-spin" />
@@ -188,34 +217,43 @@ export default function LessonPlansPage() {
           )}
 
           <div className="space-y-3">
-            {plans.map((plan) => (
-              <div key={plan.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
-                <div>
-                  <p className="text-sm font-semibold text-gray-900">{plan.title}</p>
-                  <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
-                    <span>{plan.subject}</span>
-                    <span>•</span>
-                    <span>{plan.classLevel}</span>
-                    <span>•</span>
-                    <span>{plan.topic}</span>
-                    <span>•</span>
-                    <span>{plan.durationMinutes} mins</span>
-                    {plan.aiGenerated && (
-                      <>
-                        <span>•</span>
-                        <span className="text-amber-600">AI Generated</span>
-                      </>
-                    )}
-                  </div>
-                </div>
-                <button
-                  onClick={() => handleDelete(plan.id)}
-                  className="p-2 text-gray-500 hover:text-red-600 hover:bg-white rounded-lg border border-transparent hover:border-gray-200"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+            {loading ? (
+              <div className="flex items-center gap-2 p-4 text-sm text-gray-500">
+                <Loader2 className="w-4 h-4 animate-spin" />
+                Loading lesson plans...
               </div>
-            ))}
+            ) : plans.length === 0 ? (
+              <p className="p-4 text-sm text-gray-500">No lesson plans yet. Create your first one.</p>
+            ) : (
+              plans.map((plan) => (
+                <div key={plan.id} className="flex items-center justify-between p-4 bg-gray-50 rounded-2xl">
+                  <div>
+                    <p className="text-sm font-semibold text-gray-900">{plan.title}</p>
+                    <div className="flex flex-wrap gap-2 text-xs text-gray-500 mt-1">
+                      <span>{plan.subject}</span>
+                      <span>•</span>
+                      <span>{plan.classLevel}</span>
+                      <span>•</span>
+                      <span>{plan.topic}</span>
+                      <span>•</span>
+                      <span>{plan.durationMinutes} mins</span>
+                      {plan.aiGenerated && (
+                        <>
+                          <span>•</span>
+                          <span className="text-amber-600">AI Generated</span>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => handleDelete(plan.id)}
+                    className="p-2 text-gray-500 hover:text-red-600 hover:bg-white rounded-lg border border-transparent hover:border-gray-200"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))
+            )}
           </div>
         </Card>
       </Section>

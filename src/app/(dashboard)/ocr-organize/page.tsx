@@ -53,7 +53,7 @@ export default function OcrOrganizePage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
-      formData.append('tool', 'ocr');
+      formData.append('tool', 'ocr-organize');
       formData.append('pageOrder', JSON.stringify(pages));
 
       const res = await fetch('/api/premium/upload', {

@@ -148,12 +148,9 @@ export function ToolPrimaryButton({
     <button
       onClick={onClick}
       disabled={isDisabled}
-      className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-brand-red text-white disabled:opacity-40 disabled:hover:bg-brand-red hover:bg-red-700 font-semibold rounded-2xl cursor-pointer transition-all shadow-lg shadow-red-500/10 text-xs uppercase tracking-wider disabled:cursor-not-allowed ${className}`}
+      className={`w-full flex items-center justify-center gap-2 px-6 py-4 bg-brand-red text-white hover:bg-red-700 font-semibold rounded-2xl cursor-pointer transition-all shadow-lg shadow-red-500/10 text-xs uppercase tracking-wider ${isDisabled && !loading ? 'opacity-40 cursor-not-allowed' : ''} ${className}`}
     >
-      {loading && (
-        <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
-      )}
-      {!loading && children}
+      {children}
     </button>
   );
 }

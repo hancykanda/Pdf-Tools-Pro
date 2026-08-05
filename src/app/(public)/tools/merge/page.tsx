@@ -14,6 +14,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function MergePage() {
   return (
@@ -155,6 +157,8 @@ function MergePageContent() {
     <ToolPageShell title="Merge PDF" description="Combine multiple PDF documents into a single file." icon={FileStack} popular>
       <div className="max-w-4xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {/* Step 1: Upload */}
         {step === 'upload' && (
@@ -285,73 +289,74 @@ function MergePageContent() {
         {step === 'options' && (
           <div className="space-y-6">
             <ToolCard>
-              <div className="flex items-center justify-between mb-6">
-                <div>
-                  <h2 className="font-display font-bold text-xl text-brand-dark mb-1">
-                    Merge Settings
-                  </h2>
-                  <p className="text-sm text-gray-500">
-                    Review your files and configure merge options
-                  </p>
+                <div className="flex items-center justify-between mb-6">
+                  <div>
+                    <h2 className="font-display font-bold text-xl text-brand-dark mb-1">
+                      Merge Settings
+                    </h2>
+                    <p className="text-sm text-gray-500">
+                      Review your files and configure merge options
+                    </p>
+                  </div>
+                  <button
+                    onClick={goToOptions}
+                    disabled={isProcessing}
+                    className="text-xs font-semibold text-gray-500 hover:text-brand-red transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ← Back to Upload
+                  </button>
                 </div>
-                <button
-                  onClick={goToOptions}
-                  className="text-xs font-semibold text-gray-500 hover:text-brand-red transition-colors cursor-pointer"
-                >
-                  ← Back to Upload
-                </button>
-              </div>
 
-              <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-semibold text-gray-700 mb-3">Files to Merge</h3>
-                  <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
-                    {files.map((file, index) => (
-                      <div
-                        key={index}
-                        className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
-                      >
-                        <div className="flex items-center justify-center w-6 h-6 rounded-md bg-white border border-gray-200 text-xs font-bold text-gray-500">
-                          {index + 1}
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-sm font-semibold text-gray-700 mb-3">Files to Merge</h3>
+                    <div className="space-y-2 max-h-[240px] overflow-y-auto pr-1">
+                      {files.map((file, index) => (
+                        <div
+                          key={index}
+                          className="flex items-center gap-3 p-3 bg-gray-50 rounded-xl"
+                        >
+                          <div className="flex items-center justify-center w-6 h-6 rounded-md bg-white border border-gray-200 text-xs font-bold text-gray-500">
+                            {index + 1}
+                          </div>
+                          <FileText className="w-4 h-4 text-brand-red" />
+                          <span className="text-sm font-medium text-gray-700 truncate flex-1">
+                            {file.name}
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            {formatSize(file.size)}
+                          </span>
                         </div>
-                        <FileText className="w-4 h-4 text-brand-red" />
-                        <span className="text-sm font-medium text-gray-700 truncate flex-1">
-                          {file.name}
-                        </span>
-                        <span className="text-xs text-gray-500">
-                          {formatSize(file.size)}
-                        </span>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Total Documents</span>
-                    <span className="font-semibold text-brand-dark tabular-nums">
-                      {files.length}
-                    </span>
-                  </div>
-                  <div className="h-px bg-gray-200/60" />
-                  <div className="flex items-center justify-between text-sm">
-                    <span className="text-gray-500">Combined Size</span>
-                    <span className="font-semibold text-brand-dark tabular-nums">
-                      {formatSize(files.reduce((sum, f) => sum + f.size, 0))}
-                    </span>
+                  <div className="bg-gray-50 rounded-2xl p-4 space-y-3">
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Total Documents</span>
+                      <span className="font-semibold text-brand-dark tabular-nums">
+                        {files.length}
+                      </span>
+                    </div>
+                    <div className="h-px bg-gray-200/60" />
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-gray-500">Combined Size</span>
+                      <span className="font-semibold text-brand-dark tabular-nums">
+                        {formatSize(files.reduce((sum, f) => sum + f.size, 0))}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-            </ToolCard>
+              </ToolCard>
 
             <div className="flex justify-end gap-3">
-              <ToolSecondaryButton onClick={() => setStep('upload')}>
+              <ToolSecondaryButton onClick={() => setStep('upload')} disabled={isProcessing}>
                 Back
               </ToolSecondaryButton>
               <ToolPrimaryButton onClick={handleMerge} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Processing...</span>
                   </>
                 ) : (
@@ -383,7 +388,7 @@ function MergePageContent() {
                 <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
                   {countdown > 0 ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
                       <span>Please wait {countdown}s...</span>
                     </>
                   ) : (
@@ -404,6 +409,7 @@ function MergePageContent() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function HTMLtoPDFPage() {
   const [htmlContent, setHtmlContent] = useState('');
@@ -75,8 +77,10 @@ export default function HTMLtoPDFPage() {
         body: JSON.stringify({ html: content }),
       });
 
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Conversion failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Conversion failed');
+      }
 
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
@@ -127,6 +131,8 @@ export default function HTMLtoPDFPage() {
     <ToolPageShell title="HTML to PDF" description="Convert webpages and HTML content to PDF." icon={Globe}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
           <div className="space-y-6">
@@ -275,7 +281,7 @@ export default function HTMLtoPDFPage() {
               <ToolPrimaryButton onClick={handleProcess} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Converting...</span>
                   </>
                 ) : (
@@ -306,7 +312,7 @@ export default function HTMLtoPDFPage() {
                 <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
                   {countdown > 0 ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
                       <span>Please wait {countdown}s...</span>
                     </>
                   ) : (
@@ -327,6 +333,7 @@ export default function HTMLtoPDFPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

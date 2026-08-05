@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { Spinner } from '@/components/ui/Spinner';
 import { Scissors, Upload, Download, CheckCircle2, AlertCircle, FileText, Info, X } from 'lucide-react';
 import {
   ToolPageShell,
@@ -11,8 +12,12 @@ import {
   ToolAlert,
 } from '@/components/layout/ToolPageShell';
 
+// Safety cap used when the page count could not be determined in the browser.
+const MAX_PAGE_LIMIT = 5000;
+
 export default function SplitPage() {
   const [file, setFile] = useState<File | null>(null);
+  const [pageCount, setPageCount] = useState<number | null>(null);
   const [pageRange, setPageRange] = useState('1-1');
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -20,29 +25,53 @@ export default function SplitPage() {
   const [resultData, setResultData] = useState<string | null>(null);
   const [countdown, setCountdown] = useState(0);
 
+  // Counts pages in the browser with pdfjs-dist. Purely informational: if it
+  // fails we still let the upload proceed and let the API do the work.
+  const countPages = async (selected: File) => {
+    try {
+      const pdfjs = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+        'pdfjs-dist/build/pdf.worker.min.mjs',
+        import.meta.url
+      ).toString();
+
+      const data = new Uint8Array(await selected.arrayBuffer());
+      const loadingTask = pdfjs.getDocument({ data });
+      const doc = await loadingTask.promise;
+      setPageCount(doc.numPages);
+      await loadingTask.destroy();
+    } catch {
+      setPageCount(null);
+    }
+  };
+
   const handleFile = (selected: File | null) => {
     if (selected && selected.type === 'application/pdf') {
       setFile(selected);
+      setPageCount(null);
       setError(null);
       setSuccess(false);
+      void countPages(selected);
     } else {
       setError('Please upload a valid PDF file');
     }
   };
 
-  const parsePageRange = (range: string, maxPages: number): number[] => {
+  const parsePageRange = (range: string, maxPages: number | null): number[] => {
     const indices: number[] = [];
+    const limit = maxPages ?? MAX_PAGE_LIMIT;
     const parts = range.split(',').map((p) => p.trim());
 
     for (const part of parts) {
       if (part.includes('-')) {
         const [start, end] = part.split('-').map(Number);
-        for (let i = start; i <= end && i <= maxPages; i++) {
+        if (!Number.isFinite(start) || !Number.isFinite(end)) continue;
+        for (let i = start; i <= end && i <= limit; i++) {
           if (i >= 1) indices.push(i - 1);
         }
       } else {
         const num = Number(part);
-        if (num >= 1 && num <= maxPages) indices.push(num - 1);
+        if (Number.isFinite(num) && num >= 1 && num <= limit) indices.push(num - 1);
       }
     }
 
@@ -63,15 +92,17 @@ export default function SplitPage() {
       });
 
       const cleanBase64 = base64.split(',')[1] || base64;
+      if (!cleanBase64) {
+        throw new Error('Could not read the selected file. Please try again.');
+      }
 
-      const { PDFParse } = await import('pdf-parse');
-      const parser = new PDFParse({ data: Buffer.from(cleanBase64, 'base64') });
-      const data = await parser.getText();
-      const maxPages = data.pages?.length || 1;
-
-      const pageIndices = parsePageRange(pageRange, maxPages);
+      const pageIndices = parsePageRange(pageRange, pageCount);
       if (pageIndices.length === 0) {
-        throw new Error('Invalid page range. Please check the format.');
+        throw new Error(
+          pageCount
+            ? `Invalid page range. This PDF has ${pageCount} page${pageCount === 1 ? '' : 's'}.`
+            : 'Invalid page range. Please check the format.'
+        );
       }
 
       const res = await fetch('/api/tools/split', {
@@ -143,7 +174,7 @@ export default function SplitPage() {
               <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
                 {countdown > 0 ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Please wait {countdown}s...</span>
                   </>
                 ) : (
@@ -192,10 +223,11 @@ export default function SplitPage() {
                     </h3>
                     <p className="text-xs text-gray-500 mt-0.5">
                       {formatSize(file.size)}
+                      {pageCount !== null && ` · ${pageCount} page${pageCount === 1 ? '' : 's'}`}
                     </p>
                   </div>
                   <button
-                    onClick={() => setFile(null)}
+                    onClick={() => { setFile(null); setPageCount(null); }}
                     className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-all cursor-pointer"
                     title="Remove file"
                   >
@@ -269,6 +301,13 @@ export default function SplitPage() {
                   </div>
                   <div className="h-px bg-gray-200/60" />
                   <div className="flex items-center justify-between text-sm">
+                    <span className="text-gray-500">Pages</span>
+                    <span className="font-medium text-brand-dark tabular-nums">
+                      {pageCount !== null ? pageCount : '—'}
+                    </span>
+                  </div>
+                  <div className="h-px bg-gray-200/60" />
+                  <div className="flex items-center justify-between text-sm">
                     <span className="text-gray-500">Page Range</span>
                     <span className="font-medium text-brand-dark tabular-nums">
                       {pageRange || '—'}
@@ -284,7 +323,7 @@ export default function SplitPage() {
                 >
                   {isProcessing ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
                       <span>Processing...</span>
                     </>
                   ) : (

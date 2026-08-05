@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function WordToPdfPage() {
   const {
@@ -65,8 +67,10 @@ export default function WordToPdfPage() {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Conversion failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Conversion failed');
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       setResult(url);
@@ -113,6 +117,8 @@ export default function WordToPdfPage() {
     <ToolPageShell title="Word to PDF" description="Convert Word documents to PDF format." icon={FileText}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
           <div className="space-y-6">
@@ -177,7 +183,7 @@ export default function WordToPdfPage() {
             <div className="flex justify-end gap-3">
               <ToolSecondaryButton onClick={() => setStep('upload')}>Back</ToolSecondaryButton>
               <ToolPrimaryButton onClick={handleProcess} loading={isProcessing}>
-                {isProcessing ? (<><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" /><span>Processing...</span></>) : (<><FileText className="w-5 h-5 shrink-0" /><span>Convert to PDF</span></>)}
+                {isProcessing ? (<><Spinner size={24} color="#ffffff" className="shrink-0" /><span>Processing...</span></>) : (<><FileText className="w-5 h-5 shrink-0" /><span>Convert to PDF</span></>)}
               </ToolPrimaryButton>
             </div>
           </div>
@@ -193,7 +199,7 @@ export default function WordToPdfPage() {
               <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">Your file has been processed and is ready for download.</p>
               <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
                 <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
-                  {countdown > 0 ? (<><div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" /><span>Please wait {countdown}s...</span></>) : (<><Download className="w-5 h-5 shrink-0" /><span>Download</span></>)}
+                  {countdown > 0 ? (<><Spinner size={24} color="#ffffff" className="shrink-0" /><span>Please wait {countdown}s...</span></>) : (<><Download className="w-5 h-5 shrink-0" /><span>Download</span></>)}
                 </ToolPrimaryButton>
                 <ToolSecondaryButton onClick={resetAll} className="flex-1">
                   <Upload className="w-5 h-5 shrink-0" />
@@ -205,6 +211,7 @@ export default function WordToPdfPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

@@ -2,7 +2,7 @@ FROM node:20-alpine AS base
 
 # Install dependencies only
 FROM base AS deps
-RUN apk add --no-cache libc6-compat
+RUN apk add --no-cache libc6-compat qpdf
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -21,6 +21,9 @@ RUN npm run build
 # Production runner
 FROM base AS runner
 WORKDIR /app
+
+# qpdf CLI is required at runtime by the protect-pdf / unlock-pdf API routes
+RUN apk add --no-cache qpdf
 
 ENV NODE_ENV=production
 

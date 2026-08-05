@@ -4,14 +4,14 @@ import Link from 'next/link';
 import { BrainCircuit, Award, FileText, FileQuestion, BookOpen, ClipboardList, GraduationCap, Settings } from 'lucide-react';
 
 const tools = [
-  { name: 'AI PDF Editor', href: '/dashboard/ai-editor', icon: BrainCircuit, description: 'AI-powered PDF editing and analysis' },
-  { name: 'Exam Header Customizer', href: '/dashboard/exam-header', icon: Award, description: 'Customize exam headers with logo detection' },
-  { name: 'OCR + Organize PDF', href: '/dashboard/ocr-organize', icon: FileText, description: 'OCR and page organization' },
-  { name: 'Question Bank', href: '/dashboard/questions', icon: FileQuestion, description: 'Create and manage questions' },
-  { name: 'Papers Bank', href: '/dashboard/papers', icon: BookOpen, description: 'Search and download past papers' },
-  { name: 'Exam Generator', href: '/dashboard/exam-generator', icon: ClipboardList, description: 'Generate formatted exam PDFs' },
-  { name: 'Lesson Plans', href: '/dashboard/lesson-plans', icon: GraduationCap, description: 'AI-assisted lesson planning' },
-  { name: 'Settings', href: '/dashboard/settings', icon: Settings, description: 'Manage your account' },
+  { name: 'AI PDF Editor', href: '/ai-editor', icon: BrainCircuit, description: 'AI-powered PDF editing and analysis' },
+  { name: 'Exam Header Customizer', href: '/exam-header', icon: Award, description: 'Customize exam headers with logo detection' },
+  { name: 'OCR + Organize PDF', href: '/ocr-organize', icon: FileText, description: 'OCR and page organization' },
+  { name: 'Question Bank', href: '/questions', icon: FileQuestion, description: 'Create and manage questions' },
+  { name: 'Papers Bank', href: '/papers', icon: BookOpen, description: 'Search and download past papers' },
+  { name: 'Exam Generator', href: '/exam-generator', icon: ClipboardList, description: 'Generate formatted exam PDFs' },
+  { name: 'Lesson Plans', href: '/lesson-plans', icon: GraduationCap, description: 'AI-assisted lesson planning' },
+  { name: 'Settings', href: '/settings', icon: Settings, description: 'Manage your account' },
 ];
 
 export default async function DashboardPage() {

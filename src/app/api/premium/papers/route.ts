@@ -30,7 +30,7 @@ export async function GET(request: NextRequest) {
     const papersWithUrls = await Promise.all(
       items.map(async (paper) => ({
         ...paper,
-        downloadUrl: getPresignedUrl(paper.fileUrl, 3600),
+        downloadUrl: await getPresignedUrl(paper.fileUrl, 3600),
       }))
     );
 
@@ -89,5 +89,27 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     console.error('Papers POST error:', error);
     return NextResponse.json({ error: 'Failed to create paper' }, { status: 500 });
+  }
+}
+
+export async function DELETE(request: NextRequest) {
+  try {
+    const user = await getCurrentUser();
+    if (!user) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get('id');
+    if (!id) {
+      return NextResponse.json({ error: 'Missing id' }, { status: 400 });
+    }
+
+    await prisma.paper.delete({ where: { id, userId: user.id } });
+
+    return NextResponse.json({ ok: true });
+  } catch (error) {
+    console.error('Papers DELETE error:', error);
+    return NextResponse.json({ error: 'Failed to delete paper' }, { status: 500 });
   }
 }

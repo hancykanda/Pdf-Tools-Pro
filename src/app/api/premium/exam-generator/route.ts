@@ -3,6 +3,7 @@ import { getCurrentUser } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { uploadFile } from '@/lib/minio';
 import { enqueuePremiumJob, type PremiumJobData } from '@/lib/queue';
+import '@/lib/premiumWorker';
 import { PDFDocument } from 'pdf-lib';
 
 export const dynamic = 'force-dynamic';
@@ -25,8 +26,7 @@ export async function POST(request: NextRequest) {
     const count = Number(questionCount) || 10;
 
     const where: Record<string, unknown> = {
-      userId: user.id,
-      visibility: 'PUBLIC',
+      OR: [{ visibility: 'PUBLIC' }, { userId: user.id }],
       subject: subject.trim(),
     };
     if (topicList.length > 0) {

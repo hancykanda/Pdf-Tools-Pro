@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser } from '@/lib/auth';
 import { uploadFile } from '@/lib/minio';
 import { enqueuePremiumJob, type PremiumJobData } from '@/lib/queue';
+import '@/lib/premiumWorker';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,13 +24,29 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: 'Tool name is required' }, { status: 400 });
   }
 
-  const allowedTools = ['ai-editor', 'ocr', 'exam-header', 'exam-generator'];
+  const allowedTools = [
+    'ai-editor',
+    'ocr',
+    'ocr-organize',
+    'exam-header',
+    'exam-generator',
+    'papers',
+    'lesson-plans',
+  ];
   if (!allowedTools.includes(tool)) {
     return NextResponse.json({ error: 'Invalid tool' }, { status: 400 });
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
   const objectName = `${user.id}/${tool}/${Date.now()}_${file.name}`;
+
+  // Capture tool-specific parameters so they reach the worker.
+  const extraFields = ['prompt', 'headerText', 'logoPosition', 'pageOrder', 'options'];
+  const extra: Record<string, unknown> = {};
+  for (const field of extraFields) {
+    const value = formData.get(field);
+    if (value !== null) extra[field] = value;
+  }
 
   try {
     await uploadFile(objectName, buffer, buffer.length, file.type || 'application/octet-stream', {
@@ -43,6 +60,7 @@ export async function POST(request: NextRequest) {
       objectName,
       fileName: file.name,
       mimeType: file.type || 'application/octet-stream',
+      ...extra,
     } as PremiumJobData);
 
     return NextResponse.json({ objectName, jobId, fileName: file.name, size: buffer.length });

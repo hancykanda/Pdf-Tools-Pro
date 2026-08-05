@@ -13,6 +13,8 @@ import {
   StepIndicator,
   RelatedTools,
 } from '@/components/layout';
+import { Spinner } from '@/components/ui/Spinner';
+import { ProcessingModal } from '@/components/layout';
 
 export default function CompressPage() {
   const [originalSize, setOriginalSize] = useState(0);
@@ -130,6 +132,8 @@ export default function CompressPage() {
     <ToolPageShell title="Compress PDF" description="Reduce PDF file size while preserving quality." icon={ShieldCheck}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
+        <ProcessingModal open={isProcessing} />
+        <div key={step} className="animate-slide-up">
 
         {/* Step 1: Upload */}
         {step === 'upload' && (
@@ -250,7 +254,7 @@ export default function CompressPage() {
               <ToolPrimaryButton onClick={handleCompress} loading={isProcessing}>
                 {isProcessing ? (
                   <>
-                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <Spinner size={24} color="#ffffff" className="shrink-0" />
                     <span>Compressing...</span>
                   </>
                 ) : (
@@ -287,7 +291,7 @@ export default function CompressPage() {
                 <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
                   {countdown > 0 ? (
                     <>
-                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
                       <span>Please wait {countdown}s...</span>
                     </>
                   ) : (
@@ -308,6 +312,7 @@ export default function CompressPage() {
           </div>
         )}
       </div>
+        </div>
     </ToolPageShell>
   );
 }

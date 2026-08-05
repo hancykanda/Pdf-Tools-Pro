@@ -1,5 +1,5 @@
 import { NextRequest } from 'next/server';
-import { PDFParse } from 'pdf-parse';
+import { extractPdfText } from '@/lib/pdfText';
 import * as XLSX from 'xlsx';
 
 export const dynamic = 'force-dynamic';
@@ -20,9 +20,7 @@ export async function POST(request: NextRequest) {
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const parser = new PDFParse({ data: buffer });
-    const result = await parser.getText();
-    const text = result.text || 'No text could be extracted from this PDF.';
+    const text = (await extractPdfText(buffer)) || 'No text could be extracted from this PDF.';
 
     const lines = text.split('\n').filter((line: string) => line.trim() !== '');
     const rows = lines.map((line: string) => line.split(/\s{2,}|\t/).filter((cell: string) => cell.trim() !== ''));
