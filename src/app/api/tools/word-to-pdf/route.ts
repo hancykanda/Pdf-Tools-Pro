@@ -20,6 +20,8 @@ export async function POST(request: NextRequest) {
 
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const italicFont = await pdfDoc.embedFont(StandardFonts.HelveticaOblique);
 
     const pageWidth = 595.28;
     const pageHeight = 841.89;
@@ -29,41 +31,77 @@ export async function POST(request: NextRequest) {
     let page = pdfDoc.addPage([pageWidth, pageHeight]);
     let y = pageHeight - margin;
 
-    const lines = html.replace(/<br\s*\/?>/gi, '\n').replace(/<\/?[^>]+(>|$)/g, '').split('\n');
+    const ensureSpace = (needed: number) => {
+      if (y - needed < margin) {
+        page = pdfDoc.addPage([pageWidth, pageHeight]);
+        y = pageHeight - margin;
+      }
+    };
 
-    for (const rawLine of lines) {
-      const cleanLine = rawLine.trim();
-      if (!cleanLine) {
-        y -= 12;
+    const drawLine = (text: string, x: number, yPos: number, size: number, f: typeof font, color = rgb(0.1, 0.1, 0.1)) => {
+      ensureSpace(size + 4);
+      page.drawText(text, { x, y: yPos, size, font: f, color });
+    };
+
+    const parseHtmlToLines = (html: string): Array<{ text: string; size: number; font: typeof font; bold?: boolean; italic?: boolean; spacing: number }> => {
+      const lines: Array<{ text: string; size: number; font: typeof font; bold?: boolean; italic?: boolean; spacing: number }> = [];
+
+      const tokenRegex = /<h1[^>]*>(.*?)<\/h1>|<h2[^>]*>(.*?)<\/h2>|<h3[^>]*>(.*?)<\/h3>|<p[^>]*>(.*?)<\/p>|<li[^>]*>(.*?)<\/li>|<strong>(.*?)<\/strong>|<b>(.*?)<\/b>|<em>(.*?)<\/em>|<i>(.*?)<\/i>|(<br\s*\/?>)|<[^>]+>/gim;
+      let match: RegExpExecArray | null;
+
+      while ((match = tokenRegex.exec(html)) !== null) {
+        const [, h1, h2, h3, p, li, strong, b, em, i, br] = match;
+
+        if (h1) {
+          lines.push({ text: h1.replace(/<[^>]+>/g, '').trim(), size: 24, font: boldFont, bold: true, spacing: 18 });
+        } else if (h2) {
+          lines.push({ text: h2.replace(/<[^>]+>/g, '').trim(), size: 20, font: boldFont, bold: true, spacing: 16 });
+        } else if (h3) {
+          lines.push({ text: h3.replace(/<[^>]+>/g, '').trim(), size: 16, font: boldFont, bold: true, spacing: 14 });
+        } else if (p) {
+          const text = p.replace(/<[^>]+>/g, '').trim();
+          if (text) lines.push({ text, size: 12, font, spacing: 14 });
+        } else if (li) {
+          const text = li.replace(/<[^>]+>/g, '').trim();
+          if (text) lines.push({ text: `• ${text}`, size: 12, font, spacing: 12 });
+        } else if (strong || b) {
+          const text = (strong || b || '').replace(/<[^>]+>/g, '').trim();
+          if (text) lines.push({ text, size: 12, font: boldFont, bold: true, spacing: 12 });
+        } else if (em || i) {
+          const text = (em || i || '').replace(/<[^>]+>/g, '').trim();
+          if (text) lines.push({ text, size: 12, font: italicFont, italic: true, spacing: 12 });
+        } else if (br) {
+          lines.push({ text: '', size: 12, font, spacing: 8 });
+        }
+      }
+
+      return lines;
+    };
+
+    const lines = parseHtmlToLines(html);
+
+    for (const line of lines) {
+      const cleanText = line.text.trim();
+      if (!cleanText) {
+        y -= line.spacing;
         continue;
       }
 
       if (y < margin + 40) {
         page = pdfDoc.addPage([pageWidth, pageHeight]);
-        y = pageHeight - margin - 20;
+        y = pageHeight - margin;
       }
 
-      const words = cleanLine.split(' ');
+      const words = cleanText.split(' ');
       let currentLine = '';
-      const selectedFont = font;
 
       for (const word of words) {
         const testLine = currentLine ? `${currentLine} ${word}` : word;
-        const testWidth = selectedFont.widthOfTextAtSize(testLine, 12);
+        const testWidth = line.font.widthOfTextAtSize(testLine, line.size);
 
         if (testWidth > contentWidth && currentLine) {
-          page.drawText(currentLine, {
-            x: margin,
-            y,
-            size: 12,
-            font: selectedFont,
-            color: rgb(0.1, 0.1, 0.1),
-          });
-          y -= 18;
-          if (y < margin + 40) {
-            page = pdfDoc.addPage([pageWidth, pageHeight]);
-            y = pageHeight - margin - 20;
-          }
+          drawLine(currentLine, margin, y, line.size, line.font);
+          y -= line.spacing;
           currentLine = word;
         } else {
           currentLine = testLine;
@@ -71,14 +109,8 @@ export async function POST(request: NextRequest) {
       }
 
       if (currentLine) {
-        page.drawText(currentLine, {
-          x: margin,
-          y,
-          size: 12,
-          font: selectedFont,
-          color: rgb(0.1, 0.1, 0.1),
-        });
-        y -= 18;
+        drawLine(currentLine, margin, y, line.size, line.font);
+        y -= line.spacing;
       }
     }
 
