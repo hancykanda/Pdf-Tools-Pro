@@ -16,12 +16,16 @@ export default function HTMLtoPDFPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [resultData, setResultData] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
 
   const handleFile = (selected: File | null) => {
     if (selected) {
       setFile(selected);
       setError(null);
       setSuccess(false);
+    setResultData(null);
+    setCountdown(0);
       const reader = new FileReader();
       reader.onload = (e) => {
         setHtmlContent(e.target?.result as string);
@@ -67,6 +71,30 @@ export default function HTMLtoPDFPage() {
     }
   };
 
+
+  const startCountdown = () => {
+    let remaining = 10;
+    setCountdown(remaining);
+    const timer = setInterval(() => {
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+    return timer;
+  };
+
+  const handleDownload = () => {
+    if (!resultData || countdown > 0) return;
+    const link = document.createElement('a');
+    link.href = resultData;
+    link.download = 'result.pdf';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   return (
     <ToolPageShell title="HTML to PDF" description="Convert webpages and HTML content to PDF." icon={Globe}>
       <div className="w-full grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -97,6 +125,8 @@ export default function HTMLtoPDFPage() {
                 setHtmlContent(e.target.value);
                 setFile(null);
                 setSuccess(false);
+    setResultData(null);
+    setCountdown(0);
               }}
               placeholder="Paste your HTML content here, or upload an HTML file above..."
               className="w-full h-64 p-4 border border-gray-200 rounded-2xl text-sm text-gray-700 font-mono resize-none focus:outline-none focus:ring-2 focus:ring-brand-red/20"

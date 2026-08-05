@@ -17,6 +17,7 @@ export default function PDFtoMarkdownPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [countdown, setCountdown] = useState(0);
 
   const handleFile = (selected: File | null) => {
     if (selected) {
@@ -56,6 +57,7 @@ export default function PDFtoMarkdownPage() {
 
       setMarkdown(data.markdown || '');
       setSuccess(true);
+      startCountdown();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to convert PDF to Markdown');
     } finally {
@@ -63,8 +65,21 @@ export default function PDFtoMarkdownPage() {
     }
   };
 
+  const startCountdown = () => {
+    let remaining = 10;
+    setCountdown(remaining);
+    const timer = setInterval(() => {
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+    return timer;
+  };
+
   const handleDownload = () => {
-    if (!markdown) return;
+    if (!markdown || countdown > 0) return;
     const blob = new Blob([markdown], { type: 'text/markdown' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -116,9 +131,9 @@ export default function PDFtoMarkdownPage() {
             <ToolCard>
               <div className="flex items-center justify-between mb-4">
                 <h3 className="font-display font-semibold text-lg text-brand-dark">Markdown Output</h3>
-                <ToolSecondaryButton onClick={handleDownload} className="!w-auto">
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
                   <Download className="w-4 h-4" />
-                  Download
+                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
                 </ToolSecondaryButton>
               </div>
               <div className="bg-gray-50 rounded-2xl p-4 max-h-96 overflow-y-auto">

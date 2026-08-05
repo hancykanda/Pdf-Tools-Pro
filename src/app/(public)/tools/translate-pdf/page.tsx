@@ -18,6 +18,7 @@ export default function TranslatePDFPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [countdown, setCountdown] = useState(0);
   const [warning, setWarning] = useState<string | null>(null);
 
   const handleFile = (selected: File | null) => {
@@ -61,6 +62,7 @@ export default function TranslatePDFPage() {
       setTranslatedText(data.translatedText || '');
       setWarning(data.warning || null);
       setSuccess(true);
+      startCountdown();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to translate PDF');
     } finally {
@@ -68,8 +70,21 @@ export default function TranslatePDFPage() {
     }
   };
 
+  const startCountdown = () => {
+    let remaining = 10;
+    setCountdown(remaining);
+    const timer = setInterval(() => {
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+    return timer;
+  };
+
   const handleDownload = () => {
-    if (!translatedText) return;
+    if (!translatedText || countdown > 0) return;
     const blob = new Blob([translatedText], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
@@ -130,9 +145,9 @@ export default function TranslatePDFPage() {
                 <h3 className="font-display font-semibold text-lg text-brand-dark">
                   Translated Text ({targetLanguage})
                 </h3>
-                <ToolSecondaryButton onClick={handleDownload} className="!w-auto">
+                <ToolSecondaryButton onClick={handleDownload} className="!w-auto" disabled={countdown > 0}>
                   <Download className="w-4 h-4" />
-                  Download
+                  {countdown > 0 ? `Wait ${countdown}s` : 'Download'}
                 </ToolSecondaryButton>
               </div>
               <div className="bg-gray-50 rounded-2xl p-4 max-h-96 overflow-y-auto">

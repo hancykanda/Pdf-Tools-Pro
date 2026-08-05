@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileStack, Upload, CheckCircle2, AlertCircle } from 'lucide-react';
+import { FileStack, Upload, Download, CheckCircle2, AlertCircle } from 'lucide-react';
 import { ErrorBoundary } from '@/components/ui/ErrorBoundary';
 import {
   ToolPageShell,
@@ -26,6 +26,8 @@ function MergePageContent() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [resultData, setResultData] = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
 
   const handleFiles = (selected: FileList | null) => {
     if (!selected) return;
@@ -87,14 +89,9 @@ function MergePageContent() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Merge failed');
 
-      const link = document.createElement('a');
-      link.href = data.dataUrl;
-      link.download = 'merged.pdf';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-
+      setResultData(data.dataUrl);
       setSuccess(true);
+      startCountdown();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to merge PDFs');
     } finally {
@@ -102,9 +99,34 @@ function MergePageContent() {
     }
   };
 
+  const startCountdown = () => {
+    let remaining = 10;
+    setCountdown(remaining);
+    const timer = setInterval(() => {
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining <= 0) {
+        clearInterval(timer);
+      }
+    }, 1000);
+    return timer;
+  };
+
+  const handleDownload = () => {
+    if (!resultData || countdown > 0) return;
+    const link = document.createElement('a');
+    link.href = resultData;
+    link.download = 'merged.pdf';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleReset = () => {
     setFiles([]);
     setSuccess(false);
+    setResultData(null);
+    setCountdown(0);
   };
 
   const formatSize = (bytes: number) => {
@@ -125,10 +147,23 @@ function MergePageContent() {
             </div>
             <h2 className="font-display font-bold text-3xl text-brand-dark mb-3">PDFs Merged Successfully!</h2>
             <p className="text-gray-500 text-sm mb-8 leading-relaxed text-center max-w-md">
-              Your files have been combined into a single PDF document. The download was triggered automatically.
+              Your files have been combined into a single PDF document.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 w-full justify-center">
+              <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0}>
+                {countdown > 0 ? (
+                  <>
+                    <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin shrink-0" />
+                    <span>Please wait {countdown}s...</span>
+                  </>
+                ) : (
+                  <>
+                    <Download className="w-5 h-5 shrink-0" />
+                    Download PDF
+                  </>
+                )}
+              </ToolPrimaryButton>
               <ToolSecondaryButton onClick={handleReset}>
                 <Upload className="w-5 h-5" />
                 Merge More Files

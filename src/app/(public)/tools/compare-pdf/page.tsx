@@ -37,6 +37,7 @@ export default function ComparePDFPage() {
     if (!file1 || !file2) return;
     setIsProcessing(true);
     setError(null);
+    setDiffResult(null);
 
     try {
       const readFiles = await Promise.all([
