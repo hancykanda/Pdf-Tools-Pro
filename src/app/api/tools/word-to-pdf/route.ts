@@ -14,12 +14,12 @@ export async function POST(request: NextRequest) {
     }
 
     const arrayBuffer = await file.arrayBuffer();
-    const htmlResult = await mammoth.convertToHtml({ arrayBuffer });
+    const buffer = Buffer.from(arrayBuffer);
+    const htmlResult = await mammoth.convertToHtml({ buffer });
     const html = htmlResult.value || '<p>Empty document</p>';
 
     const pdfDoc = await PDFDocument.create();
     const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
-    const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
 
     const pageWidth = 595.28;
     const pageHeight = 841.89;
