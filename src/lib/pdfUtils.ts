@@ -5,7 +5,7 @@ export async function mergePDFs(filesBase64: string[]): Promise<Uint8Array> {
 
   for (const base64 of filesBase64) {
     const cleanBase64 = base64.split(',')[1] || base64;
-    const arrayBuffer = Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
+    const arrayBuffer = Buffer.from(cleanBase64, 'base64');
 
     const doc = await PDFDocument.load(arrayBuffer);
     const pageIndices = doc.getPageIndices();
@@ -21,7 +21,7 @@ export async function mergePDFs(filesBase64: string[]): Promise<Uint8Array> {
 
 export async function splitPDF(fileBase64: string, pageIndices: number[]): Promise<Uint8Array> {
   const cleanBase64 = fileBase64.split(',')[1] || fileBase64;
-  const arrayBuffer = Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
+  const arrayBuffer = Buffer.from(cleanBase64, 'base64');
 
   const srcDoc = await PDFDocument.load(arrayBuffer);
   const newDoc = await PDFDocument.create();
@@ -41,14 +41,15 @@ export async function imagesToPDF(imagesBase64: string[], options: { margin: 'no
     const page = doc.addPage();
     const { width: pageWidth, height: pageHeight } = page.getSize();
 
-    let embeddedImage;
     const isPng = imgBase64.includes('image/png');
     const cleanBase64 = imgBase64.split(',')[1] || imgBase64;
+    const imageBuffer = Buffer.from(cleanBase64, 'base64');
 
+    let embeddedImage;
     if (isPng) {
-      embeddedImage = await doc.embedPng(cleanBase64);
+      embeddedImage = await doc.embedPng(imageBuffer);
     } else {
-      embeddedImage = await doc.embedJpg(cleanBase64);
+      embeddedImage = await doc.embedJpg(imageBuffer);
     }
 
     let marginSize = 0;
@@ -73,14 +74,14 @@ export async function imagesToPDF(imagesBase64: string[], options: { margin: 'no
 
 export function base64ToBytes(base64: string): Uint8Array {
   const cleanBase64 = base64.split(',')[1] || base64;
-  return Uint8Array.from(atob(cleanBase64), (c) => c.charCodeAt(0));
+  return Uint8Array.from(Buffer.from(cleanBase64, 'base64'));
 }
 
 export function bytesToBase64(bytes: Uint8Array, mimeType = 'application/pdf'): string {
   return `data:${mimeType};base64,${Buffer.from(bytes).toString('base64')}`;
 }
 
-export function toDataUrl(bytes: Uint8Array, mimeType = 'application/pdf') {
-  const blob = new Blob([Buffer.from(bytes)], { type: mimeType });
-  return URL.createObjectURL(blob);
+export function toDataUrl(bytes: Uint8Array, mimeType = 'application/pdf'): string {
+  const base64 = Buffer.from(bytes).toString('base64');
+  return `data:${mimeType};base64,${base64}`;
 }

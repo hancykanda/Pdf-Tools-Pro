@@ -8,6 +8,8 @@ export default function ExamHeaderPage() {
   const [file, setFile] = useState<File | null>(null);
   const [headerText, setHeaderText] = useState('');
   const [logoPosition, setLogoPosition] = useState('top-left');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [result, setResult] = useState<{ url?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

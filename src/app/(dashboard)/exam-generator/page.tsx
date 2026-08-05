@@ -9,6 +9,8 @@ export default function ExamGeneratorPage() {
   const [subject, setSubject] = useState('');
   const [topics, setTopics] = useState('');
   const [questionCount, setQuestionCount] = useState('10');
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [result, setResult] = useState<{ url?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);

@@ -7,6 +7,8 @@ import { PageContainer, Section, PageHeader, Card, ActionButton } from '@/compon
 export default function OcrOrganizePage() {
   const [file, setFile] = useState<File | null>(null);
   const [pages, setPages] = useState<number[]>([]);
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [status, setStatus] = useState<string | null>(null);
   const [result, setResult] = useState<{ url?: string; text?: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
