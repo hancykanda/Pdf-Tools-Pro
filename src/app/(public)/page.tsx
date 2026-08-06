@@ -2,12 +2,10 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import PublicLayout from './(public)/layout';
 import {
   ShieldCheck,
   Sparkles,
   Zap,
-  FileText,
   LockKeyhole,
   BrainCircuit,
   School,
@@ -134,7 +132,7 @@ export default function Home() {
   });
 
   return (
-    <PublicLayout>
+    <>
       {/* Hero */}
       <section className="bg-white border-b border-gray-100">
         <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 pt-14 pb-10 text-center">
@@ -339,6 +337,6 @@ export default function Home() {
           </Link>
         </div>
       </section>
-    </PublicLayout>
+    </>
   );
 }

@@ -3,7 +3,7 @@
  * `POST /api/subscription` — create a PENDING subscription ("intent to pay").
  *
  * There is NO payment SDK here: the response hands back a `gatewayRef` that
- * the user quotes when paying on the local gateway (Snippe.me / Flutterwave).
+ * the user quotes when paying on the local gateway (Snippe.me).
  * The gateway's webhook (`/api/webhooks/payment`) flips the row to ACTIVE.
  */
 import { NextRequest, NextResponse } from 'next/server';

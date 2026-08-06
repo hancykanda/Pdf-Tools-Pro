@@ -22,10 +22,17 @@ function isUserRole(value: unknown): value is UserRole {
 
 /**
  * Resolve the role for a brand new user:
- * Clerk `publicMetadata.role` -> `DEFAULT_ROLE` env -> `TEACHER`.
+ * Clerk `publicMetadata.role` (trusted, server-set) ->
+ * `unsafeMetadata.role` (user-supplied at sign-up; clamped to non-admin) ->
+ * `DEFAULT_ROLE` env -> `TEACHER`.
+ *
+ * `unsafeMetadata` is client-writable, so it is only trusted for TEACHER/STUDENT
+ * — a user can never self-assign the ADMIN role through it.
  */
-function resolveRole(metadataRole: unknown): UserRole {
-  if (isUserRole(metadataRole)) return metadataRole;
+function resolveRole(publicMetaRole: unknown, unsafeMetaRole?: unknown): UserRole {
+  if (isUserRole(publicMetaRole)) return publicMetaRole;
+
+  if (isUserRole(unsafeMetaRole) && unsafeMetaRole !== 'ADMIN') return unsafeMetaRole;
 
   const fromEnv = process.env.DEFAULT_ROLE;
   if (isUserRole(fromEnv)) return fromEnv;
@@ -49,7 +56,7 @@ export async function getCurrentUser(): Promise<AppUser | null> {
 
   if (!user) {
     const email = cu.emailAddresses?.[0]?.emailAddress ?? `${clerkId}@clerk.local`;
-    const role = resolveRole(cu.publicMetadata?.role);
+    const role = resolveRole(cu.publicMetadata?.role, cu.unsafeMetadata?.role);
 
     try {
       user = await prisma.user.create({

@@ -22,6 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { toast } from '@/components/ui/sonner';
+import { formatCurrency } from '@/lib/format';
+import { summarizeFeatures } from '@/lib/planFeatures';
 
 type Plan = {
   id: string;
@@ -41,8 +43,8 @@ type StatusView = {
 };
 
 const GATEWAYS = [
-  { value: 'SNIPPE', label: 'SNIPPE' },
-  { value: 'FLUTTERWAVE', label: 'Flutterwave' },
+  { value: 'SNIPPE', label: 'Snippe (Mobile Money)' },
+  { value: 'MANUAL', label: 'Manual / Bank transfer' },
 ] as const;
 
 export function SubscriptionManager({ initialActive }: { initialActive: boolean }) {
@@ -53,6 +55,7 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
   const [gateway, setGateway] = React.useState<string>('SNIPPE');
   const [submitting, setSubmitting] = React.useState(false);
   const [gatewayRef, setGatewayRef] = React.useState<string | null>(null);
+  const [checkoutUrl, setCheckoutUrl] = React.useState<string | null>(null);
   const [backendReady, setBackendReady] = React.useState(true);
 
   React.useEffect(() => {
@@ -98,17 +101,26 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
     }
     setSubmitting(true);
     try {
-      const res = await fetch('/api/subscription', {
+      // Snippe uses its own endpoint that also creates the embedded checkout
+      // session; everything else (incl. MANUAL) uses the generic endpoint.
+      const endpoint = gateway === 'SNIPPE' ? '/api/subscription/snippe' : '/api/subscription';
+      const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ planId, gateway }),
       });
-      const data = (await res.json()) as { gatewayRef?: string; ok?: boolean; error?: string };
+      const data = (await res.json()) as {
+        gatewayRef?: string;
+        checkoutUrl?: string;
+        ok?: boolean;
+        error?: string;
+      };
       if (!res.ok) {
         toast(data.error ?? 'Subscription request failed', { variant: 'error' });
         return;
       }
       setGatewayRef(data.gatewayRef ?? null);
+      setCheckoutUrl(data.checkoutUrl ?? null);
       toast('Subscription request created', { variant: 'success' });
     } catch {
       toast('Could not reach the subscription service', { variant: 'error' });
@@ -116,6 +128,36 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
       setSubmitting(false);
     }
   }
+
+  // Poll subscription status after a checkout starts; the gateway webhook is
+  // what flips PENDING -> ACTIVE, so we just watch for it.
+  React.useEffect(() => {
+    if (!gatewayRef) return;
+    let active = true;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/subscription/status');
+        if (!res.ok) return;
+        const data = (await res.json()) as StatusView & { gateway?: string | null };
+        if (!active) return;
+        setStatus((prev) =>
+          prev
+            ? { ...prev, active: data.active, status: data.status, gateway: data.gateway ?? prev.gateway }
+            : { active: data.active, status: data.status, planId: null, gateway: data.gateway ?? null },
+        );
+        if (data.active) {
+          clearInterval(interval);
+          setCheckoutUrl(null);
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [gatewayRef]);
 
   async function handleCancel() {
     setSubmitting(true);
@@ -213,23 +255,51 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Sparkles className="w-5 h-5 text-primary" />
-              Complete your payment
+              {checkoutUrl ? 'Complete payment' : 'Complete your payment'}
             </CardTitle>
             <CardDescription>
-              Use the reference below with the selected gateway. Status updates automatically via
-              webhook.
+              {checkoutUrl
+                ? 'Pay with mobile money in the widget below. It activates automatically once Snippe confirms the payment.'
+                : 'Use the reference below when paying via the selected gateway. Status updates automatically via webhook.'}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-3">
+            {checkoutUrl && (
+              <div className="overflow-hidden rounded-xl border border-border bg-white">
+                <iframe
+                  src={checkoutUrl}
+                  title="Snippe secure checkout"
+                  className="h-[560px] w-full"
+                  allow="payment"
+                />
+              </div>
+            )}
             <div className="rounded-lg bg-white border border-border p-4">
               <p className="text-xs uppercase tracking-wide text-muted-foreground">Gateway Reference</p>
               <p className="font-mono text-lg font-semibold text-foreground break-all">{gatewayRef}</p>
             </div>
-            <p className="text-sm text-muted-foreground">
-              After paying through {gateway}, our server receives a webhook callback that marks this
-              subscription <Badge variant="success">ACTIVE</Badge>. No Stripe is involved — payment is
-              handled by the {gateway} gateway.
-            </p>
+            <div className="text-sm text-muted-foreground">
+              {checkoutUrl ? (
+                <>
+                  Prefer a separate tab?{' '}
+                  <a
+                    href={checkoutUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-primary underline"
+                  >
+                    Open Snippe checkout
+                  </a>
+                  . Payment is handled by Snippe; no Stripe involved.
+                </>
+              ) : (
+                <>
+                  After paying through {gateway}, our server receives a webhook callback that marks this
+                  subscription <Badge variant="success">ACTIVE</Badge>. No Stripe is involved — payment is
+                  handled by the {gateway} gateway.
+                </>
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
@@ -243,7 +313,7 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
           <CardContent className="space-y-4">
             <div className="grid gap-3 sm:grid-cols-2">
               {plans.map((plan) => {
-                const features = parseFeatures(plan.features);
+                const features = summarizeFeatures(parseFeatures(plan.features));
                 return (
                   <div
                     key={plan.id}
@@ -254,7 +324,7 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
                     <div className="flex items-center justify-between">
                       <span className="font-medium text-foreground">{plan.name}</span>
                       <span className="text-sm text-muted-foreground">
-                        ${plan.priceMonthly}/{plan.currency}
+                        {formatCurrency(plan.priceMonthly, plan.currency)}/mo
                       </span>
                     </div>
                     {plan.description && (
@@ -312,7 +382,7 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
             <p className="text-xs text-muted-foreground">
               We don&apos;t use Stripe. After you subscribe, complete payment through the chosen
               gateway using the generated reference. The gateway sends a webhook to{' '}
-              <code className="text-foreground">/api/subscription/webhook</code> which flips your
+              <code className="text-foreground">/api/webhooks/payment</code> which flips your
               status to ACTIVE automatically.
             </p>
           </CardContent>

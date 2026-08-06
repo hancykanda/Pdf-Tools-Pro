@@ -3,6 +3,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
+import { useClerk } from '@clerk/nextjs';
 import {
   LayoutDashboard,
   Wrench,
@@ -16,17 +17,21 @@ import {
   GraduationCap,
   Settings,
   LogOut,
-  User,
   ChevronRight,
   Menu,
-  ShieldCheck,
   Sparkles,
+  Users,
+  CreditCard,
+  FileStack,
+  Trash2,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { SiteBranding } from '@/lib/settings';
 import { Button } from '@/components/ui/button';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Toaster } from '@/components/ui/sonner';
+import { Logo } from '@/components/layout/Logo';
 import {
   Sheet,
   SheetContent,
@@ -78,7 +83,12 @@ const premiumNav: NavItem[] = [
 ];
 
 const adminNav: NavItem[] = [
-  { name: 'User Management', href: '/dashboard/admin', icon: ShieldCheck },
+  { name: 'Admin Overview', href: '/dashboard/admin', icon: LayoutDashboard },
+  { name: 'Site Settings', href: '/dashboard/admin/settings', icon: Settings },
+  { name: 'Users', href: '/dashboard/admin/users', icon: Users },
+  { name: 'Plans', href: '/dashboard/admin/plans', icon: CreditCard },
+  { name: 'Subscriptions', href: '/dashboard/admin/subscriptions', icon: FileStack },
+  { name: 'Content', href: '/dashboard/admin/content', icon: Trash2 },
 ];
 
 function roleLabel(role: DashboardRole) {
@@ -152,25 +162,28 @@ function NavLinks({
 function SidebarContent({
   user,
   pathname,
+  branding,
   onNavigate,
 }: {
   user: DashboardUser;
   pathname: string;
+  branding?: SiteBranding;
   onNavigate?: () => void;
 }) {
   const premiumUnlocked = user.role === 'ADMIN' || (user.role === 'TEACHER' && user.subscriptionActive);
+
+  const siteName = branding?.siteName || 'PDF Master';
 
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-2 h-16 px-4 border-b">
         <Link href="/dashboard" className="flex items-center gap-2" onClick={onNavigate}>
-          <div className="flex items-center justify-center w-8 h-8 bg-primary text-white rounded-lg shadow-sm">
-            <span className="font-quintessential font-bold text-[11px] tracking-tight">PDF</span>
-          </div>
-          <span className="font-bree text-base tracking-tight text-foreground flex items-center">
-            <span>PDF</span>
-            <span className="font-quintessential font-bold text-primary ml-1">Master</span>
-          </span>
+          {branding?.siteLogoUrl ? (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={branding.siteLogoUrl} alt={siteName} className="h-7 w-auto object-contain" />
+          ) : (
+            <Logo textClassName="text-xl" />
+          )}
         </Link>
       </div>
 
@@ -199,13 +212,16 @@ function SidebarContent({
 
 export function DashboardShell({
   user,
+  branding,
   children,
 }: {
   user: DashboardUser | null;
+  branding?: SiteBranding;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { signOut } = useClerk();
   const [mobileOpen, setMobileOpen] = React.useState(false);
 
   const initials = (user?.name || user?.email || 'U')
@@ -222,8 +238,8 @@ export function DashboardShell({
 
   async function handleSignOut() {
     try {
-      await fetch('/api/auth/logout', { method: 'POST' });
-    } finally {
+      await signOut({ redirectUrl: '/sign-in' });
+    } catch {
       router.push('/sign-in');
       router.refresh();
     }
@@ -233,7 +249,7 @@ export function DashboardShell({
     <div className="min-h-screen bg-gray-50 flex">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-50 w-64 bg-white border-r border-border">
-        <SidebarContent user={user as DashboardUser} pathname={pathname} />
+        <SidebarContent user={user as DashboardUser} pathname={pathname} branding={branding} />
       </aside>
 
       <div className="flex-1 flex flex-col lg:ml-64 min-w-0">
@@ -250,7 +266,7 @@ export function DashboardShell({
                   <SheetHeader className="sr-only">
                     <SheetTitle>Navigation</SheetTitle>
                   </SheetHeader>
-                  <SidebarContent user={user as DashboardUser} pathname={pathname} onNavigate={() => setMobileOpen(false)} />
+                   <SidebarContent user={user as DashboardUser} pathname={pathname} branding={branding} onNavigate={() => setMobileOpen(false)} />
                 </SheetContent>
               </Sheet>
               <h1 className="text-lg font-display font-semibold text-foreground">{currentName}</h1>

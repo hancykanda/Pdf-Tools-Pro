@@ -58,7 +58,7 @@ export default clerkMiddleware(async (auth, request) => {
 
   // 1. Unauthenticated -> 401 for APIs, sign-in redirect for pages.
   if (!userId) {
-    if (premiumApi) {
+    if (premiumApi || pathname.startsWith('/api/')) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
     return redirectTo(request, '/sign-in');
@@ -77,6 +77,9 @@ export default clerkMiddleware(async (auth, request) => {
     if (premiumApi) {
       return NextResponse.json({ error: 'Service temporarily unavailable' }, { status: 503 });
     }
+    if (pathname.startsWith('/api/')) {
+      return NextResponse.next();
+    }
     if (matches(pathname, FREE_TOOL_PAGES) || matches(pathname, PREMIUM_PAGES)) {
       return redirectTo(request, '/dashboard');
     }
@@ -87,7 +90,7 @@ export default clerkMiddleware(async (auth, request) => {
   //    it lazily. Let API + dashboard requests through, park everything else
   //    on /dashboard until the row exists.
   if (!u) {
-    if (premiumApi || matches(pathname, DASHBOARD_PAGES)) {
+    if (premiumApi || matches(pathname, DASHBOARD_PAGES) || pathname.startsWith('/api/')) {
       return NextResponse.next();
     }
     return redirectTo(request, '/dashboard');
@@ -123,6 +126,9 @@ export default clerkMiddleware(async (auth, request) => {
 export const config = {
   matcher: [
     '/api/premium/:path*',
+    '/api/admin/:path*',
+    '/api/subscription/:path*',
+    '/api/auth/:path*',
     '/dashboard/:path*',
     '/ai-editor/:path*',
     '/exam-header/:path*',

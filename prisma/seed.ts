@@ -18,11 +18,38 @@
 import type { PrismaClient } from '@prisma/client';
 import { prisma } from '../src/lib/prisma';
 import { ensureDefaultPlan, listPlans } from '../src/lib/subscription';
+import { ALL_FREE_TOOL_IDS } from '../src/lib/planFeatures';
 
 const db: PrismaClient = prisma;
 
 async function main(): Promise<void> {
   const planId = await ensureDefaultPlan();
+
+  // Ensure a Free plan exists with every free tool selected by default.
+  const freeFeatures = JSON.stringify(ALL_FREE_TOOL_IDS);
+  const freePlan = await db.plan.findFirst({ where: { name: 'Free' } });
+  if (freePlan) {
+    await db.plan.update({
+      where: { id: freePlan.id },
+      data: {
+        description: 'All free PDF tools — no account required.',
+        priceMonthly: 0,
+        currency: 'TZS',
+        features: freeFeatures,
+      },
+    });
+  } else {
+    await db.plan.create({
+      data: {
+        name: 'Free',
+        description: 'All free PDF tools — no account required.',
+        priceMonthly: 0,
+        currency: 'TZS',
+        features: freeFeatures,
+      },
+    });
+  }
+
   const plans = await listPlans();
 
   console.log(`✔ Default plan ready: ${planId}`);

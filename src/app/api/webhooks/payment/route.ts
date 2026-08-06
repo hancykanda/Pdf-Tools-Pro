@@ -6,19 +6,16 @@
  * ────────────────────────────────────────────────────────────────────────────
  * 1. Set the shared secret in the env var of the gateway you use:
  *      SNIPPE_WEBHOOK_SECRET      (Snippe.me)
- *      FLUTTERWAVE_WEBHOOK_SECRET (Flutterwave "Secret hash")
  *      MANUAL_WEBHOOK_SECRET      (admin / bank-transfer confirmations)
  *    Missing secret => rejected in production, skipped (with a warning) in dev.
  *
  * 2. Point the gateway dashboard at:
  *      https://<host>/api/webhooks/payment?gateway=snippe
- *      https://<host>/api/webhooks/payment?gateway=flutterwave
  *    (or send the gateway name in the `x-gateway` header / `gateway` body
  *    field; `PAYMENT_GATEWAY` is the final fallback).
  *
  * 3. The signature is read from any of the headers listed in
- *    `SIGNATURE_HEADERS` below and verified as HMAC-SHA256 over the RAW body
- *    (Flutterwave additionally accepts its plain `verif-hash` secret).
+ *    `SIGNATURE_HEADERS` below and verified as HMAC-SHA256 over the RAW body.
  *
  * 4. Field names are mapped per gateway in `GATEWAY_VERIFIERS` inside
  *    `@/lib/subscription` — adding a new gateway is one entry in that map
@@ -40,8 +37,6 @@ const SIGNATURE_HEADERS = [
   'x-webhook-signature',
   'x-snippe-signature',
   'snippe-signature',
-  'verif-hash',
-  'x-flutterwave-signature',
   'x-hub-signature-256',
 ];
 
@@ -51,6 +46,11 @@ function readSignature(request: NextRequest): string | undefined {
     if (value && value.trim()) return value.trim();
   }
   return undefined;
+}
+
+/** Snippe sends the timestamp used to build the signature in this header. */
+function readTimestamp(request: NextRequest): string | undefined {
+  return request.headers.get('x-webhook-timestamp')?.trim() || undefined;
 }
 
 function readGateway(request: NextRequest, rawBody: string): string {
@@ -77,8 +77,9 @@ export async function POST(request: NextRequest) {
     const rawBody = await request.text();
     const gateway = readGateway(request, rawBody);
     const signature = readSignature(request);
+    const timestamp = readTimestamp(request);
 
-    const result = await applyWebhook({ gateway, payload: rawBody, signature });
+    const result = await applyWebhook({ gateway, payload: rawBody, signature, timestamp });
 
     if (!result.ok) {
       console.warn(`[webhook] ${gateway || 'unknown gateway'}: payload rejected`);

@@ -5,7 +5,7 @@
  * - Clerk is used for AUTH ONLY. There is NO Clerk Billing and NO Stripe.
  * - The subscription state lives entirely in OUR database (Prisma / MySQL).
  * - Payment happens OUTSIDE the app, on a local gateway (Snippe.me,
- *   Flutterwave, or a MANUAL bank transfer recorded by an admin). The UI only
+ *   or a MANUAL bank transfer recorded by an admin). The UI only
  *   creates a `PENDING` subscription and shows the user a payment reference
  *   (`gatewayRef`). The gateway then calls `POST /api/webhooks/payment`, which
  *   funnels into `applyWebhook()` below and flips the row to `ACTIVE`.
@@ -13,7 +13,6 @@
  *
  * Env vars used here:
  * - `SNIPPE_WEBHOOK_SECRET`      shared secret for Snippe.me webhook signatures
- * - `FLUTTERWAVE_WEBHOOK_SECRET` shared secret ("secret hash") for Flutterwave
  * - `MANUAL_WEBHOOK_SECRET`      shared secret for the MANUAL/admin gateway
  * - `PAYMENT_GATEWAY`            default gateway used by the API routes
  * - `PREMIUM_PLAN_ID`            id of the teacher monthly plan; when set,
@@ -25,6 +24,8 @@
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
+import { getGatewaySecret } from '@/lib/settings';
+import { ALL_FREE_TOOL_IDS } from '@/lib/planFeatures';
 import type { Gateway, Plan, Subscription, SubscriptionStatus } from '@prisma/client';
 
 /* -------------------------------------------------------------------------- */
@@ -55,10 +56,10 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_PLAN_NAME = 'Teacher Premium';
 
 /** All gateways we accept (mirrors the Prisma `Gateway` enum). */
-export const GATEWAYS = ['SNIPPE', 'FLUTTERWAVE', 'MANUAL'] as const;
+export const GATEWAYS = ['SNIPPE', 'MANUAL'] as const;
 export type GatewayName = (typeof GATEWAYS)[number];
 
-/** Normalizes free-form input ("snippe", "Flutterwave") to the Prisma enum. */
+/** Normalizes free-form input ("snippe", "manual") to the Prisma enum. */
 export function normalizeGateway(value: string | null | undefined): Gateway | null {
   if (!value) return null;
   const upper = value.trim().toUpperCase();
@@ -94,11 +95,19 @@ export type WebhookEvent = {
   outcome: 'success' | 'failed' | 'pending';
 };
 
+type VerifyOpts = {
+  rawBody: string;
+  signature: string;
+  secret: string;
+  /** Gateway-specific extra (e.g. Snippe's `X-Webhook-Timestamp`). */
+  timestamp?: string;
+};
+
 type GatewayAdapter = {
   /** Env var holding the shared secret for this gateway. */
   secretEnv: string;
   /** Verifies the signature header against the RAW request body. */
-  verify: (rawBody: string, signature: string, secret: string) => boolean;
+  verify: (opts: VerifyOpts) => boolean;
   /** Maps a gateway-specific payload onto our normalized `WebhookEvent`. */
   parse: (payload: Record<string, unknown>) => WebhookEvent;
 };
@@ -110,15 +119,34 @@ function constantTimeEqual(a: string, b: string): boolean {
   return timingSafeEqual(bufA, bufB);
 }
 
-/** HMAC-SHA256(rawBody, secret) compared in hex (also accepts base64/`sha256=`). */
-function hmacSha256Verify(rawBody: string, signature: string, secret: string): boolean {
+/**
+ * HMAC-SHA256 over `prefix + rawBody` (Snippe signs `{timestamp}.{body}`;
+ * MANUAL signs the body alone, so `prefix` is empty). Accepts hex, base64 and a
+ * `sha256=` prefix on the provided signature.
+ */
+function hmacSha256Verify(opts: VerifyOpts & { prefix?: string }): boolean {
+  const { rawBody, signature, secret, prefix = '' } = opts;
   const provided = signature.trim().replace(/^sha256=/i, '');
-  const mac = createHmac('sha256', secret).update(rawBody, 'utf8');
+  const mac = createHmac('sha256', secret).update(prefix + rawBody, 'utf8');
   const digest = mac.digest();
   return (
     constantTimeEqual(provided.toLowerCase(), digest.toString('hex')) ||
     constantTimeEqual(provided, digest.toString('base64'))
   );
+}
+
+/**
+ * Snippe's webhook scheme: signature = HMAC-SHA256(secret, `{ts}.{body}`),
+ * sent in `X-Webhook-Signature` with `X-Webhook-Timestamp`. We also reject
+ * timestamps older/newer than 5 minutes to block replayed payloads.
+ */
+function snippeVerify(opts: VerifyOpts): boolean {
+  const ts = opts.timestamp?.trim();
+  if (!ts || !/^\d{1,12}$/.test(ts)) return false;
+  const eventTime = Number.parseInt(ts, 10);
+  const now = Math.floor(Date.now() / 1000);
+  if (Math.abs(now - eventTime) > 300) return false;
+  return hmacSha256Verify({ ...opts, prefix: `${ts}.` });
 }
 
 function asRecord(value: unknown): Record<string, unknown> {
@@ -167,42 +195,20 @@ export const GATEWAY_VERIFIERS: Record<GatewayName, GatewayAdapter> = {
    */
   SNIPPE: {
     secretEnv: 'SNIPPE_WEBHOOK_SECRET',
-    verify: hmacSha256Verify,
+    verify: (opts) => snippeVerify(opts),
     parse: (payload) => {
+      // Snippe Sessions webhook: { type, data: { reference, session_reference,
+      // status, metadata: { gatewayRef, userId }, ... } }. Older/flat payloads
+      // (event/status/reference at the top level) are still accepted.
       const data = asRecord(payload.data ?? payload);
-      const meta = { ...asRecord(payload.metadata), ...asRecord(data.metadata), ...asRecord(data.meta) };
-      const ref = pickString(data, ['reference', 'transaction_ref', 'tx_ref', 'txRef', 'gatewayRef', 'merchant_reference']) ??
-        pickString(meta, ['reference', 'gatewayRef']);
+      const meta = { ...asRecord(data.metadata), ...asRecord(payload.metadata) };
+      const ref =
+        pickString(meta, ['gatewayRef', 'reference', 'ref', 'external_reference']) ??
+        pickString(data, ['gatewayRef', 'reference', 'session_reference', 'external_reference']);
       const status =
-        pickString(data, ['status', 'payment_status']) ?? pickString(payload, ['event', 'status', 'type']);
-      return {
-        ref,
-        userId: pickString(meta, ['userId', 'user_id', 'clerkId']),
-        outcome: classify(status),
-      };
-    },
-  },
-
-  /**
-   * Flutterwave — dashboard > Settings > Webhooks. Set the "Secret hash" to
-   * `FLUTTERWAVE_WEBHOOK_SECRET`; Flutterwave sends it verbatim in the
-   * `verif-hash` header (it does NOT HMAC the body), so we accept either the
-   * plain secret OR a real HMAC-SHA256 signature (used by their newer setups
-   * and by our own tests).
-   * Payload: { event: 'charge.completed',
-   *            data: { status: 'successful', tx_ref: 'sub_ab12…',
-   *                    meta: { userId } } }
-   */
-  FLUTTERWAVE: {
-    secretEnv: 'FLUTTERWAVE_WEBHOOK_SECRET',
-    verify: (rawBody, signature, secret) =>
-      constantTimeEqual(signature.trim(), secret) || hmacSha256Verify(rawBody, signature, secret),
-    parse: (payload) => {
-      const data = asRecord(payload.data ?? payload);
-      const meta = { ...asRecord(data.meta), ...asRecord(data.metadata), ...asRecord(payload.meta) };
-      const ref = pickString(data, ['tx_ref', 'txRef', 'reference', 'transaction_ref']) ??
-        pickString(meta, ['tx_ref', 'gatewayRef', 'reference']);
-      const status = pickString(data, ['status']) ?? pickString(payload, ['event', 'status']);
+        pickString(data, ['status', 'payment_status']) ??
+        (typeof payload.type === 'string' ? payload.type : null) ??
+        pickString(payload, ['event', 'status', 'type']);
       return {
         ref,
         userId: pickString(meta, ['userId', 'user_id', 'clerkId']),
@@ -213,12 +219,12 @@ export const GATEWAY_VERIFIERS: Record<GatewayName, GatewayAdapter> = {
 
   /**
    * MANUAL — bank transfer / cash confirmed by an admin (or an internal
-   * script). Same HMAC contract, secret in `MANUAL_WEBHOOK_SECRET`.
+   * script). Same HMAC contract (body-only), secret in `MANUAL_WEBHOOK_SECRET`.
    * Payload: { gatewayRef: 'sub_ab12…', status: 'success', userId? }
    */
   MANUAL: {
     secretEnv: 'MANUAL_WEBHOOK_SECRET',
-    verify: hmacSha256Verify,
+    verify: (opts) => hmacSha256Verify(opts),
     parse: (payload) => {
       const data = asRecord(payload.data ?? payload);
       return {
@@ -240,16 +246,18 @@ export const GATEWAY_VERIFIERS: Record<GatewayName, GatewayAdapter> = {
  * Fails CLOSED in production when the secret is missing; outside production a
  * missing secret only logs a warning so local/dev gateways can be simulated.
  */
-export function verifySignature(
+export async function verifySignature(
   gateway: string,
   payload: unknown,
   signature?: string,
-): boolean {
+  timestamp?: string,
+): Promise<boolean> {
   const name = normalizeGateway(gateway);
   if (!name) return false;
 
   const adapter = GATEWAY_VERIFIERS[name as GatewayName];
-  const secret = (process.env[adapter.secretEnv] ?? '').trim();
+  // Admin-editable secret from settings, falling back to the env var.
+  const secret = (await getGatewaySecret(name)).trim();
 
   if (!secret || secret === 'change-me') {
     if (process.env.NODE_ENV === 'production') {
@@ -265,7 +273,7 @@ export function verifySignature(
   const rawBody = typeof payload === 'string' ? payload : JSON.stringify(payload ?? {});
 
   try {
-    return adapter.verify(rawBody, signature, secret);
+    return adapter.verify({ rawBody, signature, secret, timestamp });
   } catch (error) {
     console.error('[subscription] signature verification error:', error);
     return false;
@@ -299,22 +307,23 @@ export async function listPlans(): Promise<Plan[]> {
  */
 export async function ensureDefaultPlan(): Promise<string> {
   const envId = (process.env.PREMIUM_PLAN_ID ?? '').trim();
-  const price = Number.parseFloat(process.env.PREMIUM_PLAN_PRICE ?? '') || 9.99;
+  const price = Number.parseFloat(process.env.PREMIUM_PLAN_PRICE ?? '') || 10000;
 
   const data = {
     name: DEFAULT_PLAN_NAME,
     description: 'Full AI-powered teacher workspace: AI PDF editor, OCR, question & papers bank, exam generator and lesson plans.',
     priceMonthly: price,
-    currency: 'USD',
+    currency: 'TZS',
     features: JSON.stringify([
-      'AI PDF Editor',
-      'Exam Header Customizer',
-      'OCR + Organize PDF',
-      'Question Bank',
-      'Papers Bank',
-      'Exam Generator',
-      'Lesson Plans AI',
-      'Priority support',
+      ...ALL_FREE_TOOL_IDS,
+      'ai-editor',
+      'exam-header',
+      'ocr-organize',
+      'questions',
+      'papers',
+      'exam-generator',
+      'lesson-plans',
+      'priority-support',
     ]),
     active: true,
   };
@@ -556,6 +565,7 @@ export async function applyWebhook(opts: {
   gateway: string;
   payload: unknown;
   signature?: string;
+  timestamp?: string;
 }): Promise<{ ok: boolean; status?: string }> {
   const gateway = normalizeGateway(opts.gateway);
   if (!gateway) {
@@ -563,7 +573,7 @@ export async function applyWebhook(opts: {
     return { ok: false };
   }
 
-  if (!verifySignature(gateway, opts.payload, opts.signature)) {
+  if (!(await verifySignature(gateway, opts.payload, opts.signature, opts.timestamp))) {
     console.warn(`[subscription] invalid ${gateway} webhook signature`);
     return { ok: false };
   }

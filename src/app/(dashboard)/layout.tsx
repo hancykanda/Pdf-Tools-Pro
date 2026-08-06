@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
+import { getSiteBranding } from '@/lib/settings';
 import { DashboardShell, type DashboardUser } from '@/components/dashboard/shell';
 
 export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -17,5 +18,11 @@ export default async function DashboardLayout({ children }: { children: React.Re
     subscriptionActive: user.subscriptionActive,
   };
 
-  return <DashboardShell user={dashboardUser}>{children}</DashboardShell>;
+  const branding = await getSiteBranding();
+
+  return (
+    <DashboardShell user={dashboardUser} branding={branding}>
+      {children}
+    </DashboardShell>
+  );
 }

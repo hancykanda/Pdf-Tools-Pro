@@ -70,11 +70,32 @@ export default async function DashboardPage() {
     return (
       <div className="max-w-6xl mx-auto space-y-6">
         <div>
-          <h1 className="font-display font-bold text-3xl text-foreground">Admin Dashboard</h1>
+          <h1 className="font-display font-bold text-3xl text-foreground">Welcome back, Admin</h1>
           <p className="text-muted-foreground mt-1">
-            Manage users, roles, and platform-wide settings.
+            You have full administrative access to the platform.
           </p>
         </div>
+
+        <Card className="border-primary/30 bg-primary/5">
+          <CardContent className="flex items-center justify-between py-6">
+            <div className="flex items-center gap-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-primary text-white">
+                <ShieldCheck className="w-5 h-5" />
+              </div>
+              <div>
+                <p className="font-semibold text-foreground">Admin Console</p>
+                <p className="text-sm text-muted-foreground">
+                  Manage users, plans, subscriptions, content, branding and payment gateways.
+                </p>
+              </div>
+            </div>
+            <Button asChild>
+              <Link href="/dashboard/admin">
+                Open Console <ArrowRight className="w-4 h-4" />
+              </Link>
+            </Button>
+          </CardContent>
+        </Card>
 
         <div className="grid gap-4 md:grid-cols-3">
           <Card>
@@ -83,49 +104,43 @@ export default async function DashboardPage() {
               <Users className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                View, search, and change user roles across the platform.
-              </p>
+              <p className="text-sm text-muted-foreground">View, search, and change user roles.</p>
             </CardContent>
             <CardFooter>
               <Button asChild variant="outline" className="w-full">
-                <Link href="/dashboard/admin">
-                  Open <ArrowRight className="w-4 h-4" />
-                </Link>
+                <Link href="/dashboard/admin/users">Open <ArrowRight className="w-4 h-4" /></Link>
               </Button>
             </CardFooter>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Subscription Oversight</CardTitle>
+              <CardTitle className="text-sm font-medium">Plans &amp; Subscriptions</CardTitle>
               <CreditCard className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Teachers subscribe via SNIPPE / Flutterwave gateways.
-              </p>
+              <p className="text-sm text-muted-foreground">Configure plans and oversee billing.</p>
             </CardContent>
             <CardFooter>
               <Button asChild variant="outline" className="w-full">
-                <Link href="/dashboard/subscription">
-                  Manage <ArrowRight className="w-4 h-4" />
-                </Link>
+                <Link href="/dashboard/admin/plans">Open <ArrowRight className="w-4 h-4" /></Link>
               </Button>
             </CardFooter>
           </Card>
 
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Platform Status</CardTitle>
+              <CardTitle className="text-sm font-medium">Site Settings</CardTitle>
               <ShieldCheck className="w-4 h-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <Badge variant="success">Healthy</Badge>
-              <p className="text-sm text-muted-foreground mt-2">
-                You have full administrative access.
-              </p>
+              <p className="text-sm text-muted-foreground">Branding, logo, and payment gateways.</p>
             </CardContent>
+            <CardFooter>
+              <Button asChild variant="outline" className="w-full">
+                <Link href="/dashboard/admin/settings">Open <ArrowRight className="w-4 h-4" /></Link>
+              </Button>
+            </CardFooter>
           </Card>
         </div>
       </div>

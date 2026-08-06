@@ -19,7 +19,7 @@ export default async function SubscriptionPage() {
       <div>
         <h1 className="font-display font-bold text-3xl text-foreground">Subscription</h1>
         <p className="text-muted-foreground mt-1">
-          Manage your premium teacher plan. Payments are handled by SNIPPE / Flutterwave — not
+          Manage your premium teacher plan. Payments are handled by SNIPPE — not
           Stripe.
         </p>
       </div>

@@ -63,7 +63,7 @@ model Plan {
   name          String
   description   String?
   priceMonthly  Float    @default(0)
-  currency      String   @default("USD")
+  currency      String   @default("TZS")
   features      String   @db.Text @default("[]")
   active        Boolean  @default(true)
   createdAt     DateTime @default(now())
@@ -211,4 +211,11 @@ model ExamHeader {
   updatedAt       DateTime @updatedAt
 
   @@index([userId])
+}
+
+model SiteSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt
 }
