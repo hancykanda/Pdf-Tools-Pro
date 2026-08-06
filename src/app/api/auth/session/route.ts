@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { getSession, getCurrentUser } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 
+export const dynamic = 'force-dynamic';
+
+/**
+ * Returns the current application user (Prisma row + `subscriptionActive`),
+ * or `{ user: null }` when signed out. Clerk owns the session itself.
+ */
 export async function GET() {
   try {
-    const session = await getSession();
-    if (!session) {
-      return NextResponse.json({ user: null });
-    }
-
     const user = await getCurrentUser();
     return NextResponse.json({ user });
   } catch (error) {

@@ -19,10 +19,71 @@
   --color-destructive-foreground: #ffffff;
   --color-card: #ffffff;
   --color-card-foreground: #1e1b4b;
+  --color-popover: #ffffff;
+  --color-popover-foreground: #1e1b4b;
   --color-brand-red: #e11d48;
   --color-brand-dark: #1e1b4b;
   --color-brand-gray: #f4f4f6;
   --radius-lg: 0.75rem;
+  --radius-sm: 0.25rem;
+  --radius-md: 0.5rem;
+  --radius-xl: 1rem;
+}
+
+/* shadcn/ui design tokens (HSL channels) — used by components via @theme inline
+   below. Kept in sync with the brand-red primary above. */
+:root {
+  --background: 0 0% 100%;
+  --foreground: 245 58% 19%;
+  --card: 0 0% 100%;
+  --card-foreground: 245 58% 19%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 245 58% 19%;
+  --primary: 347 76% 50%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 0 0% 96%;
+  --secondary-foreground: 245 58% 19%;
+  --muted: 0 0% 96%;
+  --muted-foreground: 0 0% 45%;
+  --accent: 0 0% 96%;
+  --accent-foreground: 245 58% 19%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 100%;
+  --border: 0 0% 90%;
+  --input: 0 0% 90%;
+  --ring: 347 76% 50%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 245 58% 19%;
+  --foreground: 0 0% 98%;
+  --card: 245 58% 21%;
+  --card-foreground: 0 0% 98%;
+  --popover: 245 58% 21%;
+  --popover-foreground: 0 0% 98%;
+  --primary: 347 76% 55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 245 30% 30%;
+  --secondary-foreground: 0 0% 98%;
+  --muted: 245 30% 30%;
+  --muted-foreground: 0 0% 65%;
+  --accent: 245 30% 30%;
+  --accent-foreground: 0 0% 98%;
+  --destructive: 0 72% 51%;
+  --destructive-foreground: 0 0% 98%;
+  --border: 245 30% 30%;
+  --input: 245 30% 30%;
+  --ring: 347 76% 55%;
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
 }
 
 @keyframes fade-in {

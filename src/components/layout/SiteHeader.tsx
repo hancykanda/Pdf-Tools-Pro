@@ -39,13 +39,13 @@ export default function SiteHeader() {
         {/* Right Actions */}
         <div className="hidden md:flex items-center gap-3">
           <Link
-            href="/auth/signin"
+            href="/sign-in"
             className="text-sm font-medium text-gray-700 hover:text-orange-500 transition-colors"
           >
             Log in
           </Link>
           <Link
-            href="/auth/register"
+            href="/sign-up"
             className="px-4 py-2 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 transition-colors"
           >
             Sign up free
@@ -84,14 +84,14 @@ export default function SiteHeader() {
 
             {/* Auth Actions */}
             <Link
-              href="/auth/signin"
+              href="/sign-in"
               className="block px-3 py-2 text-sm font-medium text-gray-700 rounded-lg hover:bg-orange-50 hover:text-orange-600 transition-colors"
               onClick={() => setMobileOpen(false)}
             >
               Log in
             </Link>
             <Link
-              href="/auth/register"
+              href="/sign-up"
               className="block w-full text-center px-4 py-2.5 bg-orange-500 text-white text-sm font-semibold rounded-lg hover:bg-orange-600 transition-colors mt-2"
               onClick={() => setMobileOpen(false)}
             >

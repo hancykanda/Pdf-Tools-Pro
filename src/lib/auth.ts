@@ -1,83 +1,126 @@
-import { SignJWT, jwtVerify, type JWTPayload } from 'jose';
-import { cookies } from 'next/headers';
+/**
+ * Auth layer — Clerk (auth + roles ONLY).
+ *
+ * Clerk owns identity/sessions/roles. Subscriptions are owned by our own DB
+ * (see `@/lib/subscription`) — there is NO Clerk Billing / Stripe here.
+ *
+ * The Prisma `User` row is the canonical application user; it is linked to the
+ * Clerk user via `User.clerkId` and created lazily on first authenticated hit.
+ */
+import { currentUser } from '@clerk/nextjs/server';
 import { prisma } from '@/lib/prisma';
+import { getSubscriptionStatus } from '@/lib/subscription';
+import type { User, UserRole } from '@prisma/client';
 
-const JWT_SECRET = new TextEncoder().encode(process.env.JWT_SECRET || 'change-me-in-production');
-const SESSION_COOKIE = 'session';
-const SESSION_MAX_AGE = 60 * 60 * 24 * 7; // 7 days
+export type AppUser = User & { subscriptionActive: boolean };
 
-export type SessionPayload = {
-  sub: string;
-  email: string;
-  name?: string;
-  role: 'USER' | 'PREMIUM' | 'ADMIN';
-  isPremium: boolean;
-  exp: number;
-};
+const USER_ROLES: readonly UserRole[] = ['ADMIN', 'TEACHER', 'STUDENT'] as const;
 
-export async function createSession(user: { id: string; email: string; name?: string | null; role: 'USER' | 'PREMIUM' | 'ADMIN'; isPremium: boolean }) {
-  const exp = Math.floor(Date.now() / 1000) + SESSION_MAX_AGE;
-  const payload: SessionPayload = {
-    sub: user.id,
-    email: user.email,
-    name: user.name ?? undefined,
-    role: user.role,
-    isPremium: user.isPremium,
-    exp,
-  };
-
-  const token = await new SignJWT(payload as unknown as JWTPayload)
-    .setProtectedHeader({ alg: 'HS256' })
-    .sign(JWT_SECRET);
-
-  const cookieStore = await cookies();
-  cookieStore.set(SESSION_COOKIE, token, {
-    httpOnly: true,
-    secure: process.env.NODE_ENV === 'production',
-    sameSite: 'lax',
-    path: '/',
-    maxAge: SESSION_MAX_AGE,
-  });
-
-  return token;
+function isUserRole(value: unknown): value is UserRole {
+  return typeof value === 'string' && (USER_ROLES as readonly string[]).includes(value);
 }
 
-export async function getSession(): Promise<SessionPayload | null> {
-  const cookieStore = await cookies();
-  const token = cookieStore.get(SESSION_COOKIE)?.value;
-  if (!token) return null;
+/**
+ * Resolve the role for a brand new user:
+ * Clerk `publicMetadata.role` -> `DEFAULT_ROLE` env -> `TEACHER`.
+ */
+function resolveRole(metadataRole: unknown): UserRole {
+  if (isUserRole(metadataRole)) return metadataRole;
 
-  try {
-    const { payload } = await jwtVerify(token, JWT_SECRET, { algorithms: ['HS256'] });
-    return payload as unknown as SessionPayload;
-  } catch {
-    return null;
+  const fromEnv = process.env.DEFAULT_ROLE;
+  if (isUserRole(fromEnv)) return fromEnv;
+
+  return 'TEACHER';
+}
+
+/**
+ * Returns the current application user (Prisma row + resolved subscription
+ * flag) or `null` when the request is not authenticated.
+ *
+ * Lazily provisions the Prisma row the first time a Clerk user shows up.
+ */
+export async function getCurrentUser(): Promise<AppUser | null> {
+  const cu = await currentUser();
+  if (!cu) return null;
+
+  const clerkId = cu.id;
+
+  let user = await prisma.user.findUnique({ where: { clerkId } });
+
+  if (!user) {
+    const email = cu.emailAddresses?.[0]?.emailAddress ?? `${clerkId}@clerk.local`;
+    const role = resolveRole(cu.publicMetadata?.role);
+
+    try {
+      user = await prisma.user.create({
+        data: {
+          clerkId,
+          email,
+          name: cu.firstName ?? null,
+          image: cu.imageUrl ?? null,
+          role,
+        },
+      });
+    } catch {
+      // Race (concurrent first request) or a pre-existing row with the same
+      // email — reconcile instead of failing the request.
+      user =
+        (await prisma.user.findUnique({ where: { clerkId } })) ??
+        (await prisma.user.update({ where: { email }, data: { clerkId } }));
+    }
   }
+
+  const subscriptionActive =
+    user.role === 'ADMIN' ? true : (await getSubscriptionStatus(user.id)).active;
+
+  return { ...user, subscriptionActive };
 }
 
-export async function clearSession() {
-  const cookieStore = await cookies();
-  cookieStore.delete(SESSION_COOKIE);
+/**
+ * Legacy shim — the custom JWT session is gone, Clerk owns sessions now.
+ * Kept so old call sites keep type-checking; always `null`.
+ */
+export async function getSession(): Promise<null> {
+  return null;
 }
 
-export async function getCurrentUser() {
-  const session = await getSession();
-  if (!session) return null;
+/**
+ * Legacy shim — sessions are created by Clerk. No-op returning an empty token.
+ */
+export async function createSession(_user: unknown): Promise<string> {
+  void _user;
+  return '';
+}
 
-  const user = await prisma.user.findUnique({
-    where: { id: session.sub },
-    select: { id: true, email: true, name: true, role: true, isPremium: true, premiumUntil: true },
-  });
+/**
+ * Legacy shim — sign-out is handled by Clerk (`<SignOutButton />` on the
+ * client, session revocation in `/api/auth/logout` on the server).
+ */
+export async function clearSession(): Promise<void> {}
 
+/**
+ * Premium access rule (single source of truth for the app):
+ * - ADMIN   -> always
+ * - TEACHER -> only with an active subscription (our DB, not Clerk Billing)
+ * - anyone else (STUDENT / anonymous) -> never
+ */
+export function hasPremiumAccess(user: AppUser | null): boolean {
+  if (!user) return false;
+  if (user.role === 'ADMIN') return true;
+  if (user.role === 'TEACHER') return user.subscriptionActive;
+  return false;
+}
+
+/** Throws when unauthenticated. */
+export async function requireUser(): Promise<AppUser> {
+  const user = await getCurrentUser();
+  if (!user) throw new Error('Not authenticated');
   return user;
 }
 
-export async function hashPassword(password: string) {
-  const bcrypt = await import('bcryptjs');
-  return bcrypt.hash(password, 12);
-}
-
-export async function verifyPassword(password: string, hash: string) {
-  const bcrypt = await import('bcryptjs');
-  return bcrypt.compare(password, hash);
+/** Throws when unauthenticated or the role is not in `roles`. */
+export async function requireRole(roles: UserRole[]): Promise<AppUser> {
+  const user = await requireUser();
+  if (!roles.includes(user.role)) throw new Error('Not authorized');
+  return user;
 }

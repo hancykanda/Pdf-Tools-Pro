@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, hasPremiumAccess } from '@/lib/auth';
 import { enqueuePremiumJob, type PremiumJobData } from '@/lib/queue';
 
 export const dynamic = 'force-dynamic';
@@ -8,6 +8,9 @@ export async function POST(request: NextRequest) {
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!hasPremiumAccess(user)) {
+    return NextResponse.json({ error: 'Premium subscription required' }, { status: 403 });
   }
 
   const body = await request.json();

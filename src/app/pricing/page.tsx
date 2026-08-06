@@ -1,26 +1,58 @@
 import Link from 'next/link';
-import { Sparkles, Check } from 'lucide-react';
+import { Check, GraduationCap, User, ShieldCheck, Sparkles } from 'lucide-react';
 import { PageContainer, Section } from '@/components/layout/PageShell';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 
-const plans = [
+const tiers = [
   {
-    name: 'Free',
+    name: 'Student',
+    icon: User,
     price: '$0',
     period: 'forever',
-    description: 'Basic PDF tools with no sign-up required.',
-    features: ['Merge, split, compress PDF', 'PDF to Word and Excel', 'Image conversions', 'No account needed'],
-    cta: 'Use Free Tools',
+    description: 'Free PDF tools — your personal dashboard is coming soon.',
+    features: [
+      'All free PDF tools (merge, split, compress, convert)',
+      'No account required',
+      'Student dashboard (coming soon)',
+    ],
+    cta: 'Browse Free Tools',
     href: '/tools',
+    variant: 'outline' as const,
   },
   {
-    name: 'Premium',
-    price: '$9',
-    period: '/month',
-    description: 'Full AI-powered teacher workspace.',
-    features: ['AI PDF Editor', 'Exam Header Customizer', 'OCR + Organize PDF', 'Question Bank', 'Papers Bank', 'Exam Generator', 'Lesson Plans AI', 'Priority support'],
-    cta: 'Get Premium',
-    href: '/auth/register',
+    name: 'Teacher',
+    icon: GraduationCap,
+    price: '$0',
+    period: 'core tools',
+    description: 'Free core tools, plus a low-cost monthly plan for premium AI teacher tools.',
+    features: [
+      'Everything in Student',
+      'All free teacher tools included',
+      'Premium tools (AI Editor, Exam Generator, Question Bank, Lesson Plans…) via monthly subscription',
+      'Priority support',
+    ],
+    cta: 'Subscribe / Upgrade',
+    href: '/dashboard/subscription',
+    variant: 'default' as const,
     featured: true,
+  },
+  {
+    name: 'Admin',
+    icon: ShieldCheck,
+    price: '—',
+    period: '',
+    description: 'Manage the whole system, users, roles, and subscriptions.',
+    features: [
+      'Everything teachers get',
+      'User management & role control',
+      'Subscription oversight',
+      'Platform configuration',
+    ],
+    cta: 'Go to Admin',
+    href: '/dashboard',
+    variant: 'outline' as const,
   },
 ];
 
@@ -30,56 +62,60 @@ export default function PricingPage() {
       <PageContainer>
         <Section>
           <div className="text-center mb-16">
-            <h1 className="font-display font-extrabold text-4xl sm:text-5xl text-gray-900 mb-4">
+            <Badge variant="warning" className="mb-4 gap-1">
+              <Sparkles className="w-3.5 h-3.5" /> Pricing
+            </Badge>
+            <h1 className="font-display font-extrabold text-4xl sm:text-5xl text-foreground mb-4">
               Simple, transparent pricing
             </h1>
-            <p className="text-gray-500 max-w-2xl mx-auto text-lg">
-              Start for free. Upgrade when you need AI-powered teacher tools.
+            <p className="text-muted-foreground max-w-2xl mx-auto text-lg">
+              Start free. Teachers upgrade with a small monthly subscription — no Stripe, paid via
+              SNIPPE / Flutterwave.
             </p>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto">
-            {plans.map((plan) => (
-              <div
-                key={plan.name}
-                className={`relative p-8 rounded-3xl border-2 ${
-                  plan.featured ? 'border-brand-red shadow-2xl' : 'border-gray-100'
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {tiers.map((tier) => (
+              <Card
+                key={tier.name}
+                className={`relative flex flex-col ${
+                  tier.featured ? 'border-primary shadow-xl ring-1 ring-primary/30' : 'border-border'
                 }`}
               >
-                {plan.featured && (
-                  <div className="absolute -top-4 left-1/2 -translate-x-1/2 px-4 py-1 bg-brand-red text-white text-sm font-bold rounded-full">
+                {tier.featured && (
+                  <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-primary text-primary-foreground text-xs font-bold rounded-full">
                     Most Popular
                   </div>
                 )}
-                <div className="text-center mb-8">
-                  <h3 className="font-display font-bold text-2xl text-gray-900 mb-2">{plan.name}</h3>
-                  <div className="flex items-baseline justify-center gap-1">
-                    <span className="font-display font-extrabold text-5xl text-gray-900">{plan.price}</span>
-                    <span className="text-gray-500">{plan.period}</span>
+                <CardHeader>
+                  <div className="flex items-center gap-3">
+                    <div className="p-2 rounded-xl bg-primary/10 text-primary">
+                      <tier.icon className="w-5 h-5" />
+                    </div>
+                    <CardTitle className="text-xl">{tier.name}</CardTitle>
                   </div>
-                  <p className="text-gray-500 mt-4">{plan.description}</p>
-                </div>
-
-                <ul className="space-y-4 mb-8">
-                  {plan.features.map((feature) => (
-                    <li key={feature} className="flex items-center gap-3 text-sm text-gray-600">
-                      <Check className="w-5 h-5 text-green-500 flex-shrink-0" />
-                      {feature}
-                    </li>
-                  ))}
-                </ul>
-
-                <Link
-                  href={plan.href}
-                  className={`block w-full text-center px-6 py-3 font-semibold rounded-xl transition-colors ${
-                    plan.featured
-                      ? 'bg-brand-red text-white hover:bg-red-700 shadow-lg shadow-red-500/10'
-                      : 'bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200'
-                  }`}
-                >
-                  {plan.cta}
-                </Link>
-              </div>
+                  <div className="flex items-baseline gap-1 pt-2">
+                    <span className="font-display font-extrabold text-4xl text-foreground">
+                      {tier.price}
+                    </span>
+                    {tier.period && <span className="text-sm text-muted-foreground">{tier.period}</span>}
+                  </div>
+                  <CardDescription className="pt-1">{tier.description}</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-1 flex-col">
+                  <ul className="space-y-3 mb-6">
+                    {tier.features.map((feature) => (
+                      <li key={feature} className="flex items-start gap-3 text-sm text-muted-foreground">
+                        <Check className="w-4 h-4 text-emerald-500 flex-shrink-0 mt-0.5" />
+                        {feature}
+                      </li>
+                    ))}
+                  </ul>
+                  <Button asChild variant={tier.variant} className="mt-auto w-full">
+                    <Link href={tier.href}>{tier.cta}</Link>
+                  </Button>
+                </CardContent>
+              </Card>
             ))}
           </div>
         </Section>

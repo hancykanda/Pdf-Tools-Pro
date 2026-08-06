@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, hasPremiumAccess } from '@/lib/auth';
 import { downloadFile } from '@/lib/minio';
 
 export const dynamic = 'force-dynamic';
@@ -11,6 +11,9 @@ export async function GET(
   const user = await getCurrentUser();
   if (!user) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+  if (!hasPremiumAccess(user)) {
+    return NextResponse.json({ error: 'Premium subscription required' }, { status: 403 });
   }
 
   const { path } = await params;

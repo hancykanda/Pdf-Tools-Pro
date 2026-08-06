@@ -8,9 +8,9 @@ datasource db {
 }
 
 enum UserRole {
-  USER
-  PREMIUM
   ADMIN
+  TEACHER
+  STUDENT
 }
 
 enum QuestionVisibility {
@@ -24,16 +24,28 @@ enum PaperStatus {
   ARCHIVED
 }
 
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+  EXPIRED
+}
+
+enum Gateway {
+  SNIPPE
+  FLUTTERWAVE
+  MANUAL
+}
+
 model User {
   id            String    @id @default(cuid())
+  clerkId       String    @unique
   email         String    @unique
   emailVerified DateTime?
   name          String?
   image         String?
   passwordHash  String?
-  role          UserRole  @default(USER)
-  isPremium     Boolean   @default(false)
-  premiumUntil  DateTime?
+  role          UserRole  @default(STUDENT)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -43,6 +55,39 @@ model User {
   papers        Paper[]
   lessonPlans   LessonPlan[]
   examHeaders   ExamHeader[]
+  subscriptions Subscription[]
+}
+
+model Plan {
+  id            String   @id @default(cuid())
+  name          String
+  description   String?
+  priceMonthly  Float    @default(0)
+  currency      String   @default("USD")
+  features      String   @db.Text @default("[]")
+  active        Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                String             @id @default(cuid())
+  userId            String
+  user              User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  planId            String
+  plan              Plan               @relation(fields: [planId], references: [id])
+  status            SubscriptionStatus @default(PENDING)
+  gateway           Gateway            @default(MANUAL)
+  gatewayRef        String?
+  currentPeriodEnd  DateTime?
+  cancelAtPeriodEnd Boolean           @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  @@index([userId])
+  @@index([status])
 }
 
 model Account {

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getCurrentUser } from '@/lib/auth';
+import { getCurrentUser, hasPremiumAccess } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { generateWithGemini } from '@/lib/gemini';
 
@@ -10,6 +10,9 @@ export async function GET(request: NextRequest) {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasPremiumAccess(user)) {
+      return NextResponse.json({ error: 'Premium subscription required' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
@@ -37,6 +40,9 @@ export async function POST(request: NextRequest) {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasPremiumAccess(user)) {
+      return NextResponse.json({ error: 'Premium subscription required' }, { status: 403 });
     }
 
     const body = await request.json();
@@ -84,6 +90,9 @@ export async function DELETE(request: NextRequest) {
     const user = await getCurrentUser();
     if (!user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+    if (!hasPremiumAccess(user)) {
+      return NextResponse.json({ error: 'Premium subscription required' }, { status: 403 });
     }
 
     const { searchParams } = new URL(request.url);
