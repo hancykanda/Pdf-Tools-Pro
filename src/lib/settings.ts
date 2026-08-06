@@ -10,7 +10,7 @@
  */
 import { prisma } from '@/lib/prisma';
 
-export const GATEWAY_NAMES = ['SNIPPE', 'MANUAL'] as const;
+export const GATEWAY_NAMES = ['SNIPPE', 'MANUAL', 'CLICKPESA'] as const;
 export type GatewayName = (typeof GATEWAY_NAMES)[number];
 
 export type GatewayConfig = {
@@ -44,6 +44,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
   appUrl: '',
   paymentGateways: {
     SNIPPE: { enabled: false, publicKey: '', secretKey: '', webhookSecret: '' },
+    CLICKPESA: { enabled: false, publicKey: '', secretKey: '', webhookSecret: '' },
     MANUAL: {
       enabled: true,
       instructions: 'Record bank transfers manually and confirm the subscription in the admin dashboard.',
@@ -171,6 +172,7 @@ export async function getGatewaySecret(gateway: string): Promise<string> {
   const envMap: Record<string, string> = {
     SNIPPE: 'SNIPPE_WEBHOOK_SECRET',
     MANUAL: 'MANUAL_WEBHOOK_SECRET',
+    CLICKPESA: 'CLICKPESA_CHECKSUM_KEY',
   };
   return (process.env[envMap[name]] ?? '').trim();
 }
@@ -195,6 +197,20 @@ export async function getGatewayApiKey(gateway: string): Promise<string> {
   const envMap: Record<string, string> = {
     SNIPPE: 'SNIPPE_API_KEY',
     MANUAL: 'MANUAL_API_KEY',
+    CLICKPESA: 'CLICKPESA_API_KEY',
   };
   return (process.env[envMap[name]] ?? '').trim();
+}
+
+/**
+ * ClickPesa Client ID, sourced from the admin "Public Key" field first and the
+ * environment as a fallback. Required (with the API Key) to mint a JWT.
+ */
+export async function getGatewayClientId(gateway: string): Promise<string> {
+  const name = GATEWAY_NAMES.find((g) => g === gateway);
+  if (!name) return '';
+  const settings = await getSiteSettings();
+  const fromDb = settings.paymentGateways[name]?.publicKey?.trim();
+  if (fromDb) return fromDb;
+  return (process.env.CLICKPESA_CLIENT_ID ?? '').trim();
 }

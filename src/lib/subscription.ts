@@ -56,7 +56,7 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_PLAN_NAME = 'Teacher Premium';
 
 /** All gateways we accept (mirrors the Prisma `Gateway` enum). */
-export const GATEWAYS = ['SNIPPE', 'MANUAL'] as const;
+export const GATEWAYS = ['SNIPPE', 'MANUAL', 'CLICKPESA'] as const;
 export type GatewayName = (typeof GATEWAYS)[number];
 
 /** Normalizes free-form input ("snippe", "manual") to the Prisma enum. */
@@ -149,6 +149,46 @@ function snippeVerify(opts: VerifyOpts): boolean {
   return hmacSha256Verify({ ...opts, prefix: `${ts}.` });
 }
 
+/**
+ * ClickPesa's webhook scheme: the body carries a `checksum` (and optional
+ * `checksumMethod`) computed as HMAC-SHA256(checksumKey, canonical_json),
+ * where canonical_json is the payload with `checksum`/`checksumMethod` removed
+ * and all object keys recursively sorted. We recompute and compare in hex.
+ */
+function canonicalize(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(canonicalize);
+  if (value && typeof value === 'object') {
+    const obj = value as Record<string, unknown>;
+    return Object.keys(obj)
+      .sort()
+      .reduce<Record<string, unknown>>((acc, key) => {
+        acc[key] = canonicalize(obj[key]);
+        return acc;
+      }, {});
+  }
+  return value;
+}
+
+function clickpesaVerify(opts: VerifyOpts): boolean {
+  const provided = opts.signature?.trim();
+  if (!provided) return false;
+  let payload: Record<string, unknown>;
+  try {
+    payload = JSON.parse(opts.rawBody) as Record<string, unknown>;
+  } catch {
+    return false;
+  }
+  const rawChecksum = payload.checksum;
+  const checksum = typeof rawChecksum === 'string' ? rawChecksum : '';
+  const body = { ...payload };
+  delete body.checksum;
+  delete body.checksumMethod;
+  if (!checksum) return false;
+  const canonical = JSON.stringify(canonicalize(body));
+  const mac = createHmac('sha256', opts.secret).update(canonical, 'utf8').digest('hex');
+  return constantTimeEqual(provided.toLowerCase(), mac);
+}
+
 function asRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === 'object' ? (value as Record<string, unknown>) : {};
 }
@@ -231,6 +271,36 @@ export const GATEWAY_VERIFIERS: Record<GatewayName, GatewayAdapter> = {
         ref: pickString(data, ['gatewayRef', 'reference', 'ref', 'tx_ref']),
         userId: pickString(data, ['userId', 'user_id', 'clerkId']),
         outcome: classify(pickString(data, ['status', 'event'])),
+      };
+    },
+  },
+
+  /**
+   * CLICKPESA — hosted checkout link (Integration Type: Hosted). Create the
+   * link via `POST /checkout-links` with `orderReference` = our gatewayRef,
+   * then iframe/redirect the customer. Webhooks are checksum-signed: the body
+   * carries `checksum`, validated by `clickpesaVerify` above. Success event is
+   * `PAYMENT RECEIVED` (status `SUCCESS`); failure is `PAYMENT FAILED`.
+   */
+  CLICKPESA: {
+    secretEnv: 'CLICKPESA_CHECKSUM_KEY',
+    verify: (opts) => clickpesaVerify(opts),
+    parse: (payload) => {
+      const data = asRecord(payload.data ?? payload);
+      const event =
+        typeof payload.event === 'string'
+          ? payload.event
+          : typeof payload.eventType === 'string'
+            ? payload.eventType
+            : null;
+      const status = pickString(data, ['status']) ?? (typeof payload.status === 'string' ? payload.status : null);
+      const statusOutcome = classify(status);
+      const outcome = statusOutcome !== 'pending' ? statusOutcome : classify(event);
+      return {
+        // `orderReference` is set to our gatewayRef when creating the link.
+        ref: pickString(data, ['orderReference', 'reference', 'paymentReference']) ?? pickString(payload, ['orderReference']),
+        userId: null,
+        outcome,
       };
     },
   },

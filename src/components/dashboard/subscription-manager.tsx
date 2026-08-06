@@ -44,6 +44,7 @@ type StatusView = {
 
 const GATEWAYS = [
   { value: 'SNIPPE', label: 'Snippe (Mobile Money)' },
+  { value: 'CLICKPESA', label: 'ClickPesa (Hosted)' },
   { value: 'MANUAL', label: 'Manual / Bank transfer' },
 ] as const;
 
@@ -101,9 +102,14 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
     }
     setSubmitting(true);
     try {
-      // Snippe uses its own endpoint that also creates the embedded checkout
-      // session; everything else (incl. MANUAL) uses the generic endpoint.
-      const endpoint = gateway === 'SNIPPE' ? '/api/subscription/snippe' : '/api/subscription';
+      // Snippe/ClickPesa use their own endpoint that creates the embedded
+      // checkout session; MANUAL uses the generic endpoint.
+      const endpoint =
+        gateway === 'SNIPPE'
+          ? '/api/subscription/snippe'
+          : gateway === 'CLICKPESA'
+            ? '/api/subscription/clickpesa'
+            : '/api/subscription';
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -288,9 +294,9 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
                     rel="noopener noreferrer"
                     className="text-primary underline"
                   >
-                    Open Snippe checkout
+                    Open {gateway} checkout
                   </a>
-                  . Payment is handled by Snippe; no Stripe involved.
+                  . Payment is handled by {gateway}; no Stripe involved.
                 </>
               ) : (
                 <>

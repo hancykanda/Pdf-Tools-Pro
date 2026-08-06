@@ -17,7 +17,7 @@ import {
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from '@/components/ui/sonner';
 
-const GATEWAYS = ['SNIPPE', 'MANUAL'] as const;
+const GATEWAYS = ['SNIPPE', 'CLICKPESA', 'MANUAL'] as const;
 type GatewayName = (typeof GATEWAYS)[number];
 
 type GatewayConfig = {
@@ -45,10 +45,11 @@ const EMPTY: Settings = {
   sitePrimaryColor: '#E11D48',
   defaultGateway: 'MANUAL',
   appUrl: '',
-  paymentGateways: {
-    SNIPPE: { enabled: false, publicKey: '', secretKey: '', webhookSecret: '' },
-    MANUAL: { enabled: true, instructions: '' },
-  },
+    paymentGateways: {
+      SNIPPE: { enabled: false, publicKey: '', secretKey: '', webhookSecret: '' },
+      CLICKPESA: { enabled: false, publicKey: '', secretKey: '', webhookSecret: '' },
+      MANUAL: { enabled: true, instructions: '' },
+    },
 };
 
 export function SiteSettingsForm() {
@@ -303,29 +304,37 @@ export function SiteSettingsForm() {
                   ) : (
                     <>
                       <div>
-                        <Label htmlFor={`pk-${name}`}>Public Key</Label>
+                        <Label htmlFor={`pk-${name}`}>
+                          {name === 'CLICKPESA' ? 'Client ID' : 'Public Key'}
+                        </Label>
                         <Input
                           id={`pk-${name}`}
                           value={g.publicKey || ''}
                           onChange={(e) => setGateway(name, { publicKey: e.target.value })}
-                          placeholder="pk_…"
+                          placeholder={name === 'CLICKPESA' ? 'From ClickPesa app settings' : 'pk_…'}
                         />
                       </div>
                       <div>
-                        <Label htmlFor={`sk-${name}`}>API Key (Bearer)</Label>
+                        <Label htmlFor={`sk-${name}`}>
+                          {name === 'CLICKPESA' ? 'API Key' : 'API Key (Bearer)'}
+                        </Label>
                         <Input
                           id={`sk-${name}`}
                           type="password"
                           value={g.secretKey || ''}
                           onChange={(e) => setGateway(name, { secretKey: e.target.value })}
-                          placeholder="snp_…"
+                          placeholder={name === 'CLICKPESA' ? 'From ClickPesa app settings' : 'snp_…'}
                         />
                         <p className="text-xs text-muted-foreground mt-1">
-                          Your Snippe API key — used by the server to create checkout sessions.
+                          {name === 'CLICKPESA'
+                            ? 'Your ClickPesa API Key — exchanged for a JWT used to create checkout links.'
+                            : 'Your Snippe API key — used by the server to create checkout sessions.'}
                         </p>
                       </div>
                       <div className="md:col-span-2">
-                        <Label htmlFor={`wh-${name}`}>Webhook Secret</Label>
+                        <Label htmlFor={`wh-${name}`}>
+                          {name === 'CLICKPESA' ? 'Checksum Key' : 'Webhook Secret'}
+                        </Label>
                         <Input
                           id={`wh-${name}`}
                           type="password"
@@ -340,10 +349,11 @@ export function SiteSettingsForm() {
                       <div className="md:col-span-2">
                         <Label>Webhook URL</Label>
                         <code className="block rounded-md bg-muted px-3 py-2 text-xs break-all">
-                          {(settings.appUrl || (typeof window !== 'undefined' ? window.location.origin : ''))}/api/webhooks/payment?gateway=snippe
+                          {(settings.appUrl || (typeof window !== 'undefined' ? window.location.origin : ''))}/api/webhooks/payment?gateway={name.toLowerCase()}
                         </code>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Point this URL at Snippe (Dashboard → Settings → Webhooks) and set the Webhook Secret above to its signing key.
+                          Point this URL at {name}&apos;s webhook settings and set the
+                          {name === 'CLICKPESA' ? ' Checksum Key' : ' Webhook Secret'} above to its signing key.
                         </p>
                       </div>
                     </>

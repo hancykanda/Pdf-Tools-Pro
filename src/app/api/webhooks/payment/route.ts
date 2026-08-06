@@ -40,10 +40,25 @@ const SIGNATURE_HEADERS = [
   'x-hub-signature-256',
 ];
 
-function readSignature(request: NextRequest): string | undefined {
+function readSignature(request: NextRequest, rawBody?: string): string | undefined {
   for (const header of SIGNATURE_HEADERS) {
     const value = request.headers.get(header);
     if (value && value.trim()) return value.trim();
+  }
+  // ClickPesa (and some others) carry the signature in the body as `checksum`.
+  if (rawBody) {
+    try {
+      const parsed = JSON.parse(rawBody) as Record<string, unknown>;
+      const bodySig =
+        typeof parsed.checksum === 'string'
+          ? parsed.checksum
+          : typeof (parsed.data as Record<string, unknown> | undefined)?.checksum === 'string'
+            ? ((parsed.data as Record<string, unknown>).checksum as string)
+            : undefined;
+      if (bodySig?.trim()) return bodySig.trim();
+    } catch {
+      /* not JSON */
+    }
   }
   return undefined;
 }
@@ -76,7 +91,7 @@ export async function POST(request: NextRequest) {
     // RAW body — signatures are computed over the exact bytes sent.
     const rawBody = await request.text();
     const gateway = readGateway(request, rawBody);
-    const signature = readSignature(request);
+    const signature = readSignature(request, rawBody);
     const timestamp = readTimestamp(request);
 
     const result = await applyWebhook({ gateway, payload: rawBody, signature, timestamp });

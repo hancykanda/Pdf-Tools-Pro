@@ -34,6 +34,7 @@ enum SubscriptionStatus {
 enum Gateway {
   SNIPPE
   FLUTTERWAVE
+  CLICKPESA
   MANUAL
 }
 
