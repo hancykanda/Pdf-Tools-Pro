@@ -1,99 +1,138 @@
 import { NextRequest } from 'next/server';
-import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { spawn, execSync } from 'node:child_process';
+import { mkdtempSync, writeFileSync, readFileSync, existsSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 export const dynamic = 'force-dynamic';
 
-pdfjs.GlobalWorkerOptions.workerSrc = new URL('pdfjs-dist/legacy/build/pdf.worker.mjs', import.meta.url).toString();
+const DOCX_MIME =
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 
-function getFontSizeFromTransform(transform: number[]): number {
-  if (!transform || transform.length < 4) return 12;
-  const height = Math.abs(transform[0]) || Math.abs(transform[1]) || 12;
-  return Math.round(height * 0.8) || 12;
+/** Locate the LibreOffice binary (soffice preferred, libreoffice fallback). */
+function findSoffice(): string | null {
+  for (const candidate of ['soffice', 'libreoffice']) {
+    try {
+      const resolved = execSync(`command -v ${candidate}`, {
+        encoding: 'utf8',
+      }).trim();
+      if (resolved) return resolved;
+    } catch {
+      // not on PATH, try next candidate
+    }
+  }
+  return null;
+}
+
+/** Run `soffice --headless --convert-to docx` and return the produced .docx bytes. */
+function convertPdfToDocx(pdfBuffer: Buffer): Promise<Buffer> {
+  return new Promise((resolve, reject) => {
+    const soffice = findSoffice();
+    if (!soffice) {
+      reject(new Error('LibreOffice is not installed on the server.'));
+      return;
+    }
+
+    const workDir = mkdtempSync(join(tmpdir(), 'pdftoword-'));
+    const inputPath = join(workDir, 'input.pdf');
+    const outputPath = join(workDir, 'input.docx');
+    // A unique profile dir prevents "lock file" conflicts when several
+    // conversions run at the same time on the same machine.
+    const profileDir = join(workDir, 'profile');
+
+    writeFileSync(inputPath, pdfBuffer);
+
+    const args = [
+      '--headless',
+      '--norestore',
+      '--nofirststartwizard',
+      '--nologo',
+      `-env:UserInstallation=file://${profileDir}`,
+      // Import the PDF through the Writer filter so its text becomes real,
+      // editable paragraphs instead of a Draw page (which can't export to
+      // the Word text format).
+      '--infilter=writer_pdf_import',
+      '--convert-to',
+      'docx:Office Open XML Text',
+      '--outdir',
+      workDir,
+      inputPath,
+    ];
+
+    const proc = spawn(soffice, args);
+    let stderr = '';
+    proc.stderr.on('data', (d) => (stderr += d.toString()));
+    proc.on('error', (err) => {
+      cleanup(workDir);
+      reject(err);
+    });
+    proc.on('close', (code) => {
+      try {
+        if (code !== 0 || !existsSync(outputPath)) {
+          cleanup(workDir);
+          reject(
+            new Error(
+              `LibreOffice conversion failed (exit ${code}). ${stderr.slice(0, 500)}`,
+            ),
+          );
+          return;
+        }
+        const docx = readFileSync(outputPath);
+        cleanup(workDir);
+        resolve(docx);
+      } catch (err) {
+        cleanup(workDir);
+        reject(err instanceof Error ? err : new Error('Failed to read converted file'));
+      }
+    });
+  });
+}
+
+function cleanup(dir: string) {
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // best effort
+  }
 }
 
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { pdfBase64 } = body;
+    const contentType = request.headers.get('content-type') || '';
+    let pdfBuffer: Buffer | null = null;
 
-    if (!pdfBase64) {
+    if (contentType.includes('multipart/form-data')) {
+      const formData = await request.formData();
+      const file = formData.get('file') as File | null;
+      if (file) pdfBuffer = Buffer.from(await file.arrayBuffer());
+    } else {
+      const body = await request.json();
+      const pdfBase64: string | undefined = body.pdfBase64;
+      if (pdfBase64) {
+        const clean = pdfBase64.split(',')[1] || pdfBase64;
+        pdfBuffer = Buffer.from(clean, 'base64');
+      }
+    }
+
+    if (!pdfBuffer || pdfBuffer.length === 0) {
       return Response.json({ error: 'PDF file is required' }, { status: 400 });
     }
 
-    const cleanBase64 = pdfBase64.split(',')[1] || pdfBase64;
-    const buffer = Buffer.from(cleanBase64, 'base64');
-    const uint8Array = new Uint8Array(buffer);
+    const docx = await convertPdfToDocx(pdfBuffer);
 
-    const doc = await pdfjs.getDocument({ data: uint8Array }).promise;
-    const pagesCount = doc.numPages;
-    const pages: string[] = [];
-
-    for (let i = 1; i <= pagesCount; i++) {
-      const page = await doc.getPage(i);
-      const textContent = await page.getTextContent();
-      const items = textContent.items as Array<{
-        str?: string;
-        transform?: number[];
-        width?: number;
-        height?: number;
-      }>;
-
-      if (items.length === 0) {
-        pages.push('');
-        await page.cleanup();
-        continue;
-      }
-
-      const lines: Array<{ text: string; y: number; fontSize: number }> = [];
-      let currentLine = '';
-      let lastY = items[0].transform?.[5] ?? 0;
-      let lineFontSize = getFontSizeFromTransform(items[0].transform || []);
-
-      for (const item of items) {
-        const text = item.str || '';
-        if (!text) continue;
-        const y = item.transform?.[5] ?? lastY;
-        const fontSize = getFontSizeFromTransform(item.transform || []);
-
-        if (Math.abs(y - lastY) > fontSize * 0.3) {
-          lines.push({ text: currentLine, y: lastY, fontSize: lineFontSize });
-          currentLine = '';
-          lastY = y;
-          lineFontSize = fontSize;
-        } else if (currentLine) {
-          currentLine += ' ';
-        }
-
-        currentLine += text;
-        lineFontSize = Math.min(lineFontSize, fontSize) || lineFontSize;
-      }
-
-      if (currentLine) {
-        lines.push({ text: currentLine, y: lastY, fontSize: lineFontSize });
-      }
-
-      const sortedLines = lines.sort((a, b) => b.y - a.y);
-      const pageText = sortedLines.map((line) => {
-        const trimmed = line.text.trim();
-        if (!trimmed) return '';
-        if (line.fontSize >= 18) return `# ${trimmed}`;
-        if (line.fontSize >= 14) return `## ${trimmed}`;
-        if (line.fontSize >= 12) return trimmed;
-        return `> ${trimmed}`;
-      }).join('\n');
-
-      pages.push(pageText);
-      await page.cleanup();
-    }
-
-    const fullText = pages.join('\n\n---\n\n');
-
-    return Response.json({
-      text: fullText.trim() || 'No text could be extracted from this PDF.',
-      pagesCount,
+    return new Response(new Uint8Array(docx), {
+      status: 200,
+      headers: {
+        'Content-Type': DOCX_MIME,
+        'Content-Disposition': 'attachment; filename="converted.docx"',
+        'Content-Length': String(docx.length),
+        'Cache-Control': 'no-store',
+      },
     });
   } catch (error) {
-    console.error('PDF extract error:', error);
-    return Response.json({ error: 'Failed to extract text from PDF' }, { status: 500 });
+    console.error('PDF to Word error:', error);
+    const message =
+      error instanceof Error ? error.message : 'Failed to convert PDF to Word';
+    return Response.json({ error: message }, { status: 500 });
   }
 }

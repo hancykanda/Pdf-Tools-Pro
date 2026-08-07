@@ -2,7 +2,9 @@ FROM node:20-alpine AS base
 
 # Install dependencies only
 FROM base AS deps
-RUN apk add --no-cache libc6-compat qpdf
+# qpdf CLI is required by protect-pdf / unlock-pdf routes.
+# LibreOffice (writer + impress) powers the PDF -> Word (.docx) conversion.
+RUN apk add --no-cache libc6-compat qpdf libreoffice-writer libreoffice-impress fontconfig ttf-dejavu ttf-liberation
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -22,8 +24,9 @@ RUN npm run build
 FROM base AS runner
 WORKDIR /app
 
-# qpdf CLI is required at runtime by the protect-pdf / unlock-pdf API routes
-RUN apk add --no-cache qpdf
+# qpdf CLI is required at runtime by the protect-pdf / unlock-pdf API routes.
+# LibreOffice powers the PDF -> Word (.docx) conversion at runtime.
+RUN apk add --no-cache qpdf libreoffice-writer libreoffice-impress fontconfig ttf-dejavu ttf-liberation
 
 ENV NODE_ENV=production
 

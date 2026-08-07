@@ -17,7 +17,8 @@ import { Spinner } from '@/components/ui/Spinner';
 import { ProcessingModal } from '@/components/layout';
 
 export default function PdfToWordPage() {
-  const [text, setText] = useState('');
+  const [docxUrl, setDocxUrl] = useState<string>('');
+  const [docxName, setDocxName] = useState<string>('converted.docx');
   const {
     step,
     setStep,
@@ -41,7 +42,7 @@ export default function PdfToWordPage() {
       setFile(selected);
       setError(null);
       setSuccess(false);
-      setText('');
+      setDocxUrl('');
     } else {
       setError('Please upload a valid PDF file');
     }
@@ -76,12 +77,19 @@ export default function PdfToWordPage() {
         body: JSON.stringify({ pdfBase64: cleanBase64 }),
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Extraction failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Conversion failed');
+      }
 
-      const extractedText = data.text || '';
-      setText(extractedText);
-      setResult(extractedText);
+      const blob = await res.blob();
+      if (blob.size === 0) throw new Error('Conversion produced an empty file');
+
+      const url = URL.createObjectURL(blob);
+      const baseName = file?.name?.replace(/\.[^/.]+$/, '') || 'document';
+      setDocxUrl(url);
+      setDocxName(`${baseName}.docx`);
+      setResult(baseName);
       setSuccess(true);
       startCountdown();
       goToDownload();
@@ -106,33 +114,14 @@ export default function PdfToWordPage() {
   };
 
   const handleDownload = () => {
-    if (!text || countdown > 0) return;
+    if (!docxUrl || countdown > 0) return;
 
-    const htmlContent = `
-      <html xmlns:o='urn:schemas-microsoft-com:office:office' xmlns:w='urn:schemas-microsoft-com:office:word' xmlns='http://www.w3.org/TR/REC-html40'>
-      <head>
-        <title>${file?.name?.replace(/\.[^/.]+$/, '') || 'document'}</title>
-        <style>
-          body { font-family: 'Calibri', 'Arial', sans-serif; font-size: 11pt; line-height: 1.5; color: #333333; margin: 1in; }
-          h1 { color: #1E3A8A; font-family: 'Georgia', serif; font-size: 18pt; margin-bottom: 12pt; }
-          p { margin-bottom: 10pt; }
-        </style>
-      </head>
-      <body>
-        ${text.split('\n').filter((p) => p.trim() !== '').map((p) => `<p>${p}</p>`).join('\n')}
-      </body>
-      </html>
-    `;
-
-    const blob = new Blob(['\ufeff', htmlContent], { type: 'application/msword' });
-    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.href = url;
-    link.download = `${file?.name?.replace(/\.[^/.]+$/, '') || 'document'}.doc`;
+    link.href = docxUrl;
+    link.download = docxName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
   };
 
   const formatSize = (bytes: number) => {
@@ -144,7 +133,7 @@ export default function PdfToWordPage() {
   };
 
   return (
-    <ToolPageShell title="PDF to Word" description="Extract text from PDF and download as Word document." icon={FileEdit} popular>
+    <ToolPageShell title="PDF to Word" description="Convert a PDF into an editable Word (.docx) document." icon={FileEdit} popular>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
         <ProcessingModal open={isProcessing} />
@@ -254,7 +243,7 @@ export default function PdfToWordPage() {
                 <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl">
                   <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                   <p className="text-xs text-blue-700 leading-relaxed">
-                    Text will be extracted from your PDF and formatted for Word. The extracted text will be available for preview and download.
+                     Your PDF will be converted into a real, editable Word (.docx) file using LibreOffice. Layout, paragraphs, and text are preserved for download.
                   </p>
                 </div>
               </div>
@@ -314,15 +303,17 @@ export default function PdfToWordPage() {
                 </ToolSecondaryButton>
               </div>
 
-              {text && (
+              {docxUrl && (
                 <div className="text-left">
                   <h3 className="font-display font-semibold text-lg text-brand-dark mb-3">
-                    Extracted Text
+                    Ready to download
                   </h3>
-                  <div className="bg-gray-50 rounded-2xl p-4 max-h-96 overflow-y-auto">
-                    <pre className="text-sm text-gray-700 whitespace-pre-wrap font-sans">
-                      {text}
-                    </pre>
+                  <div className="bg-gray-50 rounded-2xl p-4">
+                    <p className="text-sm text-gray-700">
+                      Your PDF has been converted to an editable Word document
+                      (<span className="font-semibold">{docxName}</span>). Click
+                      &ldquo;Download Word&rdquo; to save the <code>.docx</code> file.
+                    </p>
                   </div>
                 </div>
               )}
