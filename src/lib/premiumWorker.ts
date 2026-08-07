@@ -224,7 +224,7 @@ async function applyReorder(buffer: Buffer, pageOrder: string): Promise<Buffer> 
   return Buffer.from(await out.save());
 }
 
-async function handleJob(job: Job<PremiumJobData, PremiumJobResult, string>): Promise<PremiumJobResult> {
+export async function handleJob(job: Job<PremiumJobData, PremiumJobResult, string>): Promise<PremiumJobResult> {
   const data = job.data;
   const tool = String(data.tool || '');
   const objectName = String(data.objectName || '');

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, hasPremiumAccess } from '@/lib/auth';
 import { uploadFile } from '@/lib/minio';
-import { enqueuePremiumJob, type PremiumJobData } from '@/lib/queue';
+import { dispatchPremiumJob, type PremiumJobData } from '@/lib/premiumDispatch';
 import '@/lib/premiumWorker';
 import { generateWithGemini } from '@/lib/gemini';
 
@@ -42,7 +42,7 @@ export async function POST(request: NextRequest) {
       ocrText = 'OCR processing encountered an issue.';
     }
 
-    const jobId = await enqueuePremiumJob('ocr-process', {
+    const jobId = await dispatchPremiumJob('ocr-process', {
       userId: user.id,
       tool: 'ocr',
       objectName,

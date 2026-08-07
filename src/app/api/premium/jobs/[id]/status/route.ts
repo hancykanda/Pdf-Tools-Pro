@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, hasPremiumAccess } from '@/lib/auth';
-import { getJobStatus } from '@/lib/queue';
+import { getPremiumJobStatus } from '@/lib/premiumDispatch';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,7 +22,7 @@ export async function GET(
     return NextResponse.json({ error: 'Invalid job id' }, { status: 400 });
   }
 
-  const status = await getJobStatus(id);
+  const status = await getPremiumJobStatus(id);
   if (!status) {
     return NextResponse.json({ error: 'Job not found' }, { status: 404 });
   }

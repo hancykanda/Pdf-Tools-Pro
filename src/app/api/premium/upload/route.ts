@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, hasPremiumAccess } from '@/lib/auth';
 import { uploadFile } from '@/lib/minio';
-import { enqueuePremiumJob, type PremiumJobData } from '@/lib/queue';
+import { dispatchPremiumJob, type PremiumJobData } from '@/lib/premiumDispatch';
 import '@/lib/premiumWorker';
 
 export const dynamic = 'force-dynamic';
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       originalName: file.name,
     });
 
-    const jobId = await enqueuePremiumJob(`${tool}-process`, {
+    const jobId = await dispatchPremiumJob(`${tool}-process`, {
       userId: user.id,
       tool,
       objectName,

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, hasPremiumAccess } from '@/lib/auth';
 import { prisma } from '@/lib/prisma';
 import { uploadFile } from '@/lib/minio';
-import { enqueuePremiumJob, type PremiumJobData } from '@/lib/queue';
+import { dispatchPremiumJob, type PremiumJobData } from '@/lib/premiumDispatch';
 import '@/lib/premiumWorker';
 import { PDFDocument } from 'pdf-lib';
 
@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
       originalName: 'exam.pdf',
     });
 
-    const jobId = await enqueuePremiumJob('exam-generator-process', {
+    const jobId = await dispatchPremiumJob('exam-generator-process', {
       userId: user.id,
       tool: 'exam-generator',
       objectName,

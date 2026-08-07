@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getCurrentUser, hasPremiumAccess } from '@/lib/auth';
 import { uploadFile } from '@/lib/minio';
-import { enqueuePremiumJob, type PremiumJobData } from '@/lib/queue';
+import { dispatchPremiumJob, type PremiumJobData } from '@/lib/premiumDispatch';
 import '@/lib/premiumWorker';
 import { generateWithGemini } from '@/lib/gemini';
 import { PDFDocument } from 'pdf-lib';
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest) {
       aiInstruction = 'Apply the requested edit conservatively while preserving existing content.';
     }
 
-    const jobId = await enqueuePremiumJob('ai-editor-process', {
+    const jobId = await dispatchPremiumJob('ai-editor-process', {
       userId: user.id,
       tool: 'ai-editor',
       objectName,
