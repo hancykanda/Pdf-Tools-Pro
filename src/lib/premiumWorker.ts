@@ -90,12 +90,24 @@ async function applyHeader(buffer: Buffer, headerText: string): Promise<Buffer> 
 }
 
 async function applyOcr(buffer: Buffer, mimeType: string): Promise<Buffer> {
-  // PDF: extract embedded text layer.
+  // PDF (including scanned/image-based): use Gemini's document understanding
+  // for real OCR. This extracts text from rendered pages, not just an embedded
+  // text layer, so scanned PDFs are handled correctly.
   if (mimeType === 'application/pdf' || buffer.slice(0, 4).toString() === '%PDF') {
-    const text = await extractPdfText(buffer);
-    return buildTextPdf('OCR / Extracted Text', text || 'No text layer found in this PDF.');
+    try {
+      const base64 = buffer.toString('base64');
+      const text = await generateWithGemini(
+        'Extract all readable text from this PDF document, page by page, preserving reading order and structure. Return only the extracted text.',
+        [{ mimeType: 'application/pdf', data: base64 }]
+      );
+      return buildTextPdf('OCR / Extracted Text', text || 'No text could be extracted from this PDF.');
+    } catch {
+      // Fallback to the embedded text layer when Gemini is unavailable.
+      const text = await extractPdfText(buffer);
+      return buildTextPdf('OCR / Extracted Text', text || 'No text layer found in this PDF.');
+    }
   }
-  // Image: attempt Gemini vision OCR if a key is configured.
+  // Image: Gemini vision OCR.
   try {
     const base64 = buffer.toString('base64');
     const text = await generateWithGemini(
