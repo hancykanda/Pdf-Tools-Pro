@@ -35,11 +35,20 @@ type Plan = {
   active: boolean;
 };
 
+type FreeTrialView = {
+  enabled: boolean;
+  durationDays: number;
+  terms: string;
+};
+
 type StatusView = {
   active: boolean;
   status: string | null;
   planId: string | null;
   gateway: string | null;
+  isTrial?: boolean;
+  trialEndsAt?: string | null;
+  role?: string;
 };
 
 const GATEWAYS = [
@@ -58,6 +67,9 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
   const [gatewayRef, setGatewayRef] = React.useState<string | null>(null);
   const [checkoutUrl, setCheckoutUrl] = React.useState<string | null>(null);
   const [backendReady, setBackendReady] = React.useState(true);
+  const [freeTrial, setFreeTrial] = React.useState<FreeTrialView | null>(null);
+  const [startingTrial, setStartingTrial] = React.useState(false);
+  const [pollingTrial, setPollingTrial] = React.useState(false);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -73,7 +85,10 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
           return;
         }
 
-        const plansData = (await plansRes.json()) as { plans?: Plan[] } | Plan[];
+        const plansData = (await plansRes.json()) as {
+          plans?: Plan[];
+          freeTrial?: FreeTrialView;
+        } | Plan[];
         const statusData = (await statusRes.json()) as StatusView;
 
         if (cancelled) return;
@@ -83,6 +98,8 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
           : ((plansData as { plans?: Plan[] }).plans ?? []);
         setPlans(list);
         setStatus(statusData);
+        const ft = !Array.isArray(plansData) ? plansData.freeTrial : undefined;
+        if (ft) setFreeTrial(ft);
         if (list.length > 0) setPlanId(list[0].id);
       } catch {
         if (!cancelled) setBackendReady(false);
@@ -94,6 +111,54 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
       cancelled = true;
     };
   }, []);
+
+  // Poll subscription status while a free trial is starting (the DB row is
+  // written immediately, so polling just refreshes the UI state).
+  React.useEffect(() => {
+    if (!pollingTrial) return;
+    let active = true;
+    const interval = setInterval(async () => {
+      try {
+        const res = await fetch('/api/subscription/status');
+        if (!res.ok) return;
+        const data = (await res.json()) as StatusView;
+        if (!active) return;
+        setStatus((prev) =>
+          prev
+            ? { ...prev, active: data.active, status: data.status, isTrial: data.isTrial, trialEndsAt: data.trialEndsAt, gateway: data.gateway ?? prev.gateway }
+            : { ...data },
+        );
+        if (data.active) {
+          clearInterval(interval);
+          setPollingTrial(false);
+        }
+      } catch {
+        /* keep polling */
+      }
+    }, 3000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [pollingTrial]);
+
+  async function handleStartTrial() {
+    setStartingTrial(true);
+    try {
+      const res = await fetch('/api/subscription/trial', { method: 'POST' });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok || !data.ok) {
+        toast(data.error ?? 'Could not start free trial', { variant: 'error' });
+        return;
+      }
+      setPollingTrial(true);
+      toast('Free trial started', { variant: 'success' });
+    } catch {
+      toast('Could not reach the subscription service', { variant: 'error' });
+    } finally {
+      setStartingTrial(false);
+    }
+  }
 
   async function handleSubscribe() {
     if (!planId) {
@@ -234,14 +299,23 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
               <div>
                 <div className="flex items-center gap-2">
                   <span className="font-medium">
-                    {isActive ? 'Active' : status.status ?? 'No active plan'}
+                    {isActive
+                      ? status.isTrial
+                        ? 'Free trial'
+                        : 'Active'
+                      : status.status ?? 'No active plan'}
                   </span>
-                  <Badge variant={isActive ? 'success' : 'warning'}>
+                  <Badge variant={isActive ? (status.isTrial ? 'info' : 'success') : 'warning'}>
                     {status.status ?? 'NONE'}
                   </Badge>
                 </div>
-                {status.gateway && (
+                {status.gateway && !status.isTrial && (
                   <p className="text-sm text-muted-foreground">Gateway: {status.gateway}</p>
+                )}
+                {status.isTrial && status.trialEndsAt && (
+                  <p className="text-sm text-muted-foreground">
+                    Trial ends {new Date(status.trialEndsAt).toLocaleDateString()}
+                  </p>
                 )}
               </div>
             </div>
@@ -249,10 +323,53 @@ export function SubscriptionManager({ initialActive }: { initialActive: boolean 
           {isActive && (
             <CardFooter>
               <Button variant="outline" onClick={handleCancel} disabled={submitting}>
-                Cancel subscription
+                {status.isTrial ? 'End trial' : 'Cancel subscription'}
               </Button>
             </CardFooter>
           )}
+        </Card>
+      )}
+
+      {freeTrial?.enabled && status?.role === 'TEACHER' && !isActive && !pollingTrial && (
+        <Card className="border-primary/40 bg-primary/5">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Sparkles className="w-5 h-5 text-primary" />
+              Start your free trial
+            </CardTitle>
+            <CardDescription>
+              Try every premium teacher tool free for {freeTrial.durationDays} days. No payment
+              required to start.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {freeTrial.terms && (
+              <div className="rounded-lg border border-border bg-white p-4">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">
+                  Trial terms
+                </p>
+                <p className="text-sm text-foreground whitespace-pre-wrap mt-1">
+                  {freeTrial.terms}
+                </p>
+              </div>
+            )}
+            <Button onClick={handleStartTrial} disabled={startingTrial} className="w-full sm:w-auto">
+              {startingTrial ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Sparkles className="w-4 h-4" />
+              )}
+              Start {freeTrial.durationDays}-day free trial
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {pollingTrial && (
+        <Card>
+          <CardContent className="flex items-center justify-center py-8 text-muted-foreground">
+            <Loader2 className="w-5 h-5 mr-2 animate-spin" /> Activating your free trial…
+          </CardContent>
         </Card>
       )}
 

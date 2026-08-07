@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import { Save, Upload, Trash2, Loader2, CreditCard, Palette } from 'lucide-react';
+import { Save, Upload, Trash2, Loader2, CreditCard, Palette, Sparkles } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
@@ -28,6 +28,12 @@ type GatewayConfig = {
   instructions?: string;
 };
 
+type FreeTrialConfig = {
+  enabled: boolean;
+  durationDays: number;
+  terms: string;
+};
+
 type Settings = {
   siteName: string;
   siteTagline: string;
@@ -36,6 +42,7 @@ type Settings = {
   defaultGateway: string;
   appUrl: string;
   paymentGateways: Record<string, GatewayConfig>;
+  freeTrial: FreeTrialConfig;
 };
 
 const EMPTY: Settings = {
@@ -50,6 +57,7 @@ const EMPTY: Settings = {
       CLICKPESA: { enabled: false, publicKey: '', secretKey: '', webhookSecret: '' },
       MANUAL: { enabled: true, instructions: '' },
     },
+  freeTrial: { enabled: false, durationDays: 14, terms: '' },
 };
 
 export function SiteSettingsForm() {
@@ -64,7 +72,7 @@ export function SiteSettingsForm() {
         const res = await fetch('/api/admin/settings');
         if (res.ok) {
           const data = await res.json();
-          if (!cancelled) setSettings({ ...EMPTY, ...data, paymentGateways: { ...EMPTY.paymentGateways, ...(data.paymentGateways || {}) } });
+          if (!cancelled) setSettings({ ...EMPTY, ...data, paymentGateways: { ...EMPTY.paymentGateways, ...(data.paymentGateways || {}) }, freeTrial: { ...EMPTY.freeTrial, ...(data.freeTrial || {}) } });
         } else if (res.status === 403) {
           if (!cancelled) toast('Admins only', { variant: 'error' });
         }
@@ -133,6 +141,9 @@ export function SiteSettingsForm() {
         </TabsTrigger>
         <TabsTrigger value="gateways">
           <CreditCard className="w-4 h-4 mr-1.5" /> Payment Gateways
+        </TabsTrigger>
+        <TabsTrigger value="freetrial">
+          <Sparkles className="w-4 h-4 mr-1.5" /> Free Trial
         </TabsTrigger>
       </TabsList>
 
@@ -363,6 +374,67 @@ export function SiteSettingsForm() {
             );
           })}
         </div>
+      </TabsContent>
+
+      <TabsContent value="freetrial">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Sparkles className="w-5 h-5 text-primary" /> Free Trial
+              </CardTitle>
+              <CardDescription>
+                Let teachers try all premium tools free for a limited time. Off by default.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <Label htmlFor="trial-enabled" className="text-xs">
+                Enable free trial
+              </Label>
+              <Switch
+                id="trial-enabled"
+                checked={settings.freeTrial.enabled}
+                onCheckedChange={(v) =>
+                  set('freeTrial', { ...settings.freeTrial, enabled: v })
+                }
+              />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div>
+              <Label htmlFor="trial-days">Trial length (days)</Label>
+              <Input
+                id="trial-days"
+                type="number"
+                min={1}
+                max={365}
+                value={settings.freeTrial.durationDays}
+                onChange={(e) =>
+                  set('freeTrial', { ...settings.freeTrial, durationDays: Number(e.target.value) })
+                }
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                How many days a teacher keeps premium access after starting a trial (1–365).
+              </p>
+            </div>
+
+            <div>
+              <Label htmlFor="trial-terms">Trial terms &amp; conditions</Label>
+              <Textarea
+                id="trial-terms"
+                rows={6}
+                value={settings.freeTrial.terms}
+                onChange={(e) =>
+                  set('freeTrial', { ...settings.freeTrial, terms: e.target.value })
+                }
+                placeholder="e.g. The free trial includes all premium tools for 14 days. No payment is taken. After the trial ends, a paid plan is required to keep premium access."
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Shown to teachers on the &quot;Start free trial&quot; screen. Supports plain text.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
       </TabsContent>
 
       <div className="flex justify-end">

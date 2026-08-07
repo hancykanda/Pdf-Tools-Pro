@@ -25,6 +25,8 @@ export async function GET() {
       // ADMIN bypasses billing entirely (see `hasPremiumAccess` in @/lib/auth).
       premium: user.role === 'ADMIN' ? true : status.active,
       role: user.role,
+      isTrial: status.isTrial,
+      trialEndsAt: status.trialEndsAt,
       plan: plan ? { ...plan, featureList: parsePlanFeatures(plan) } : null,
     });
   } catch (error) {

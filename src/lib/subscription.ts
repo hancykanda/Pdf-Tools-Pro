@@ -24,7 +24,7 @@
  */
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 import { prisma } from '@/lib/prisma';
-import { getGatewaySecret } from '@/lib/settings';
+import { getGatewaySecret, getSiteSettings } from '@/lib/settings';
 import { ALL_FREE_TOOL_IDS } from '@/lib/planFeatures';
 import type { Gateway, Plan, Subscription, SubscriptionStatus } from '@prisma/client';
 
@@ -38,6 +38,10 @@ export type SubscriptionView = {
   planId: string | null;
   currentPeriodEnd: Date | null;
   gateway: string | null;
+  /** True when the active state is a free trial (status === 'TRIALING'). */
+  isTrial: boolean;
+  /** Free-trial end date, when the subscription is a trial. */
+  trialEndsAt: Date | null;
 };
 
 const INACTIVE: SubscriptionView = {
@@ -46,11 +50,16 @@ const INACTIVE: SubscriptionView = {
   planId: null,
   currentPeriodEnd: null,
   gateway: null,
+  isTrial: false,
+  trialEndsAt: null,
 };
 
 /** Length of one billing period granted by a successful payment. */
 export const BILLING_PERIOD_DAYS = 30;
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/** Statuses that count as "currently premium" (paid or free trial). */
+const PREMIUM_STATUSES: SubscriptionStatus[] = ['ACTIVE', 'TRIALING'];
 
 /** Name used to find/upsert the single built-in teacher plan. */
 export const DEFAULT_PLAN_NAME = 'Teacher Premium';
@@ -412,6 +421,83 @@ export async function ensureDefaultPlan(): Promise<string> {
 }
 
 /* -------------------------------------------------------------------------- */
+/* Free trial                                                                  */
+/* -------------------------------------------------------------------------- */
+
+/** Admin-configured free-trial settings (see `@/lib/settings`). */
+export async function getFreeTrialConfig() {
+  const settings = await getSiteSettings();
+  return settings.freeTrial;
+}
+
+export type StartTrialResult = {
+  id: string;
+  status: 'TRIALING';
+  trialEndsAt: Date;
+};
+
+/**
+ * Grants a teacher a free trial of the premium plan.
+ *
+ * Guardrails:
+ * - Free trials must be enabled in site settings.
+ * - Only `TEACHER` users are eligible (premium is teacher-scoped).
+ * - The user must not already have an ACTIVE or TRIALING subscription.
+ *
+ * The trial is a `TRIALING` subscription on the default plan whose
+ * `currentPeriodEnd` is `now + durationDays`. `getSubscriptionStatus` already
+ * treats `TRIALING` as active premium, so no UI/auth change is required.
+ */
+export async function startFreeTrial(userId: string): Promise<StartTrialResult> {
+  if (!userId) throw new Error('userId is required');
+
+  const user = await prisma.user.findUnique({
+    where: { id: userId },
+    select: { id: true, role: true },
+  });
+  if (!user) throw new Error('User not found');
+
+  const cfg = await getFreeTrialConfig();
+  if (!cfg.enabled) throw new Error('Free trials are not enabled');
+  if (user.role !== 'TEACHER') {
+    throw new Error('Free trials are available to teachers only');
+  }
+
+  const existing = await prisma.subscription.findFirst({
+    where: { userId, status: { in: ['ACTIVE', 'TRIALING'] as const } },
+    select: { id: true, status: true },
+  });
+  if (existing) {
+    throw new Error(
+      existing.status === 'TRIALING'
+        ? 'You already have an active free trial'
+        : 'You already have an active subscription',
+    );
+  }
+
+  const planId = await ensureDefaultPlan();
+  const days = Math.max(1, Math.min(365, Math.floor(cfg.durationDays) || 14));
+  const trialEndsAt = new Date(Date.now() + days * DAY_MS);
+
+  const created = await prisma.subscription.create({
+    data: {
+      userId,
+      planId,
+      status: 'TRIALING',
+      gateway: 'MANUAL',
+      currentPeriodEnd: trialEndsAt,
+    },
+    select: { id: true, status: true, currentPeriodEnd: true },
+  });
+
+  return {
+    id: created.id,
+    status: 'TRIALING',
+    trialEndsAt: created.currentPeriodEnd ?? trialEndsAt,
+  };
+}
+
+/* -------------------------------------------------------------------------- */
 /* Status                                                                     */
 /* -------------------------------------------------------------------------- */
 
@@ -420,7 +506,7 @@ function activeWhere(userId: string) {
   const now = new Date();
   return {
     userId,
-    status: 'ACTIVE' as const,
+        status: { in: PREMIUM_STATUSES },
     OR: [{ currentPeriodEnd: null }, { currentPeriodEnd: { gt: now } }],
   };
 }
@@ -453,7 +539,7 @@ export async function expireStaleSubscriptions(userId?: string): Promise<number>
     const { count } = await prisma.subscription.updateMany({
       where: {
         ...(userId ? { userId } : {}),
-        status: 'ACTIVE',
+    status: { in: PREMIUM_STATUSES },
         currentPeriodEnd: { not: null, lt: new Date() },
       },
       data: { status: 'EXPIRED' },
@@ -484,6 +570,8 @@ export async function getSubscriptionStatus(userId: string): Promise<Subscriptio
         planId: active.planId,
         currentPeriodEnd: active.currentPeriodEnd,
         gateway: active.gateway,
+        isTrial: active.status === 'TRIALING',
+        trialEndsAt: active.status === 'TRIALING' ? active.currentPeriodEnd : null,
       };
     }
 

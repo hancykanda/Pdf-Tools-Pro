@@ -11,6 +11,7 @@ import { getCurrentUser } from '@/lib/auth';
 import {
   createGatewayRef,
   createSubscription,
+  getFreeTrialConfig,
   getSubscriptionStatus,
   listPlans,
   normalizeGateway,
@@ -27,9 +28,10 @@ export async function GET() {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const [plans, subscription] = await Promise.all([
+    const [plans, subscription, freeTrial] = await Promise.all([
       listPlans(),
       getSubscriptionStatus(user.id),
+      getFreeTrialConfig(),
     ]);
 
     return NextResponse.json({
@@ -37,6 +39,12 @@ export async function GET() {
       // parsed convenience version for the UI.
       plans: plans.map((plan) => ({ ...plan, featureList: parsePlanFeatures(plan) })),
       subscription,
+      // Free-trial availability/terms for the upgrade UI (no secrets here).
+      freeTrial: {
+        enabled: freeTrial.enabled,
+        durationDays: freeTrial.durationDays,
+        terms: freeTrial.terms,
+      },
     });
   } catch (error) {
     console.error('Subscription GET error:', error);

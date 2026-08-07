@@ -79,7 +79,7 @@ const premiumNav: NavItem[] = [
   { name: 'Papers Bank', href: '/papers', icon: BookOpen, premium: true },
   { name: 'Exam Generator', href: '/exam-generator', icon: ClipboardList, premium: true },
   { name: 'Lesson Plans', href: '/lesson-plans', icon: GraduationCap, premium: true },
-  { name: 'Settings', href: '/settings', icon: Settings, premium: true },
+  { name: 'Settings', href: '/settings', icon: Settings },
 ];
 
 const adminNav: NavItem[] = [

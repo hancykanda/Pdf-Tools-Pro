@@ -27,6 +27,7 @@ enum PaperStatus {
 enum SubscriptionStatus {
   PENDING
   ACTIVE
+  TRIALING
   CANCELLED
   EXPIRED
 }

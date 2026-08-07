@@ -23,6 +23,15 @@ export type GatewayConfig = {
 
 export type PaymentGateways = Record<string, GatewayConfig>;
 
+export type FreeTrialSettings = {
+  /** Master switch: when off, no teacher can start a free trial. */
+  enabled: boolean;
+  /** Length of a trial in days (1–365; clamped on save). */
+  durationDays: number;
+  /** Terms & conditions shown to the teacher before they start a trial. */
+  terms: string;
+};
+
 export type SiteSettings = {
   siteName: string;
   siteTagline: string;
@@ -33,6 +42,14 @@ export type SiteSettings = {
   /** Public origin (https://…) used to build gateway webhook + redirect URLs. */
   appUrl: string;
   paymentGateways: PaymentGateways;
+  /** Free-trial configuration (teacher-only, opt-in via the subscription UI). */
+  freeTrial: FreeTrialSettings;
+};
+
+export const DEFAULT_FREE_TRIAL: FreeTrialSettings = {
+  enabled: false,
+  durationDays: 14,
+  terms: '',
 };
 
 export const DEFAULT_SITE_SETTINGS: SiteSettings = {
@@ -50,6 +67,7 @@ export const DEFAULT_SITE_SETTINGS: SiteSettings = {
       instructions: 'Record bank transfers manually and confirm the subscription in the admin dashboard.',
     },
   },
+  freeTrial: { ...DEFAULT_FREE_TRIAL },
 };
 
 export type SiteSettingsInput = Partial<SiteSettings>;
@@ -89,6 +107,13 @@ export async function getSiteSettings(): Promise<SiteSettings> {
       gateways[name] = { ...gateways[name], ...stored[name] };
     }
   }
+  const storedTrial = parseJson<FreeTrialSettings>(rows.freeTrial, DEFAULT_FREE_TRIAL);
+  const trial: FreeTrialSettings = {
+    enabled: storedTrial.enabled ?? DEFAULT_FREE_TRIAL.enabled,
+    durationDays: clampDays(storedTrial.durationDays ?? DEFAULT_FREE_TRIAL.durationDays),
+    terms: typeof storedTrial.terms === 'string' ? storedTrial.terms : DEFAULT_FREE_TRIAL.terms,
+  };
+
   return {
     siteName: rows.siteName ?? DEFAULT_SITE_SETTINGS.siteName,
     siteTagline: rows.siteTagline ?? DEFAULT_SITE_SETTINGS.siteTagline,
@@ -97,7 +122,15 @@ export async function getSiteSettings(): Promise<SiteSettings> {
     defaultGateway: rows.defaultGateway ?? DEFAULT_SITE_SETTINGS.defaultGateway,
     appUrl: rows.appUrl ?? DEFAULT_SITE_SETTINGS.appUrl,
     paymentGateways: gateways,
+    freeTrial: trial,
   };
+}
+
+/** Clamps trial length to a sane range (1–365 days). */
+export function clampDays(days: unknown): number {
+  const n = Math.floor(Number(days));
+  if (!Number.isFinite(n)) return DEFAULT_FREE_TRIAL.durationDays;
+  return Math.max(1, Math.min(365, n));
 }
 
 /** Upserts each provided key. Unknown keys are ignored. */
@@ -132,6 +165,17 @@ export async function updateSiteSettings(input: SiteSettingsInput): Promise<Site
       }
     }
     updates.push({ key: 'paymentGateways', value: JSON.stringify(merged) });
+  }
+
+  if (input.freeTrial && typeof input.freeTrial === 'object') {
+    const current = await getSiteSettings();
+    const incoming = input.freeTrial;
+    const merged: FreeTrialSettings = {
+      enabled: Boolean(incoming.enabled ?? current.freeTrial.enabled),
+      durationDays: clampDays(incoming.durationDays ?? current.freeTrial.durationDays),
+      terms: typeof incoming.terms === 'string' ? incoming.terms.slice(0, 10_000) : current.freeTrial.terms,
+    };
+    updates.push({ key: 'freeTrial', value: JSON.stringify(merged) });
   }
 
   for (const u of updates) {
