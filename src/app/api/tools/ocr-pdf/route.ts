@@ -1,13 +1,86 @@
 import { NextRequest } from 'next/server';
-import { PDFDocument } from 'pdf-lib';
-import { extractPdfText } from '@/lib/pdfText';
-import { base64ToBytes } from '@/lib/pdfUtils';
+import { ocrPdf } from '@/lib/ocr';
+import { runCommand, which } from '@/lib/cli';
 
+export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
+export const maxDuration = 600;
+
+/**
+ * OCR PDF — ocrmypdf (which wraps Tesseract).
+ *   ocrmypdf --skip-text -l eng in.pdf out.pdf
+ *
+ * `--skip-text` means pages that already carry a text layer are passed through
+ * untouched instead of erroring out, so the tool is safe for mixed documents.
+ */
+
+/**
+ * Languages offered in the UI dropdown -> Tesseract traineddata codes.
+ * Kept local: `route.ts` may only export HTTP handlers + route segment config.
+ */
+const OCR_LANGUAGES: { code: string; label: string }[] = [
+  { code: 'eng', label: 'English' },
+  { code: 'fra', label: 'French' },
+  { code: 'deu', label: 'German' },
+  { code: 'spa', label: 'Spanish' },
+  { code: 'ita', label: 'Italian' },
+  { code: 'por', label: 'Portuguese' },
+  { code: 'nld', label: 'Dutch' },
+  { code: 'rus', label: 'Russian' },
+  { code: 'chi_sim', label: 'Chinese (Simplified)' },
+  { code: 'jpn', label: 'Japanese' },
+  { code: 'kor', label: 'Korean' },
+  { code: 'ara', label: 'Arabic' },
+];
+
+const LANGUAGE_CODES = new Set(OCR_LANGUAGES.map((l) => l.code));
+
+let installedCache: { at: number; codes: string[] } | null = null;
+
+/** Ask Tesseract which traineddata packs are actually present on this machine. */
+async function installedLanguages(): Promise<string[]> {
+  if (installedCache && Date.now() - installedCache.at < 60_000) return installedCache.codes;
+
+  const tesseract = which('tesseract');
+  if (!tesseract) {
+    installedCache = { at: Date.now(), codes: [] };
+    return [];
+  }
+
+  try {
+    const res = await runCommand(tesseract, ['--list-langs'], { timeoutMs: 15_000 });
+    const codes = `${res.stdout}\n${res.stderr}`
+      .split('\n')
+      .map((line) => line.trim())
+      .filter((line) => /^[A-Za-z0-9_]+$/.test(line) && line !== 'osd');
+    installedCache = { at: Date.now(), codes };
+    return codes;
+  } catch {
+    installedCache = { at: Date.now(), codes: [] };
+    return [];
+  }
+}
 
 interface Upload {
   buffer: Buffer;
   filename: string;
+  lang: string;
+}
+
+function sanitizeFilename(name: string): string {
+  const base = (name.split(/[\\/]/).pop() || 'document.pdf').replace(/["\r\n]/g, '');
+  return base.trim() || 'document.pdf';
+}
+
+function base64ToBuffer(value: string): Buffer {
+  const clean = value.includes(',') ? value.slice(value.indexOf(',') + 1) : value;
+  return Buffer.from(clean, 'base64');
+}
+
+/** Only ever hand a known-good, allow-listed code to the CLI. */
+function parseLang(value: unknown): string {
+  const raw = typeof value === 'string' ? value.toLowerCase().trim() : '';
+  return LANGUAGE_CODES.has(raw) ? raw : 'eng';
 }
 
 async function readUpload(request: NextRequest): Promise<Upload | { error: string }> {
@@ -19,7 +92,11 @@ async function readUpload(request: NextRequest): Promise<Upload | { error: strin
     if (!(entry instanceof File) || entry.size === 0) {
       return { error: 'PDF file is required' };
     }
-    return { buffer: Buffer.from(await entry.arrayBuffer()), filename: entry.name || 'document.pdf' };
+    return {
+      buffer: Buffer.from(await entry.arrayBuffer()),
+      filename: sanitizeFilename(entry.name || 'document.pdf'),
+      lang: parseLang(formData.get('lang') ?? formData.get('language')),
+    };
   }
 
   let body: unknown;
@@ -29,26 +106,55 @@ async function readUpload(request: NextRequest): Promise<Upload | { error: strin
     return { error: 'Invalid request body' };
   }
 
-  const { file, filename } = (body || {}) as { file?: unknown; filename?: unknown };
+  const { file, filename, lang, language } = (body || {}) as {
+    file?: unknown;
+    filename?: unknown;
+    lang?: unknown;
+    language?: unknown;
+  };
+
   if (typeof file !== 'string' || file.length === 0) {
     return { error: 'PDF file is required' };
   }
 
-  let bytes: Uint8Array;
+  let buffer: Buffer;
   try {
-    bytes = base64ToBytes(file);
+    buffer = base64ToBuffer(file);
   } catch {
     return { error: 'Could not decode the uploaded PDF' };
   }
 
-  if (bytes.length === 0) {
-    return { error: 'The uploaded PDF is empty' };
-  }
+  if (buffer.length === 0) return { error: 'The uploaded PDF is empty' };
 
   return {
-    buffer: Buffer.from(bytes),
-    filename: typeof filename === 'string' && filename ? filename : 'document.pdf',
+    buffer,
+    filename: sanitizeFilename(typeof filename === 'string' && filename ? filename : 'document.pdf'),
+    lang: parseLang(lang ?? language),
   };
+}
+
+function isPdf(buffer: Buffer): boolean {
+  return buffer.subarray(0, 5).toString('latin1').startsWith('%PDF-');
+}
+
+function outputName(filename: string): string {
+  const stem = filename.replace(/\.pdf$/i, '') || 'document';
+  return `${stem}-ocr.pdf`;
+}
+
+/** Advertise the language dropdown options and whether each pack is installed. */
+export async function GET() {
+  const installed = await installedLanguages();
+  const available = new Set(installed);
+
+  return Response.json(
+    {
+      engine: which('ocrmypdf') ? 'ocrmypdf' : null,
+      languages: OCR_LANGUAGES.map((l) => ({ ...l, available: available.has(l.code) })),
+      installed,
+    },
+    { headers: { 'Cache-Control': 'no-store' } },
+  );
 }
 
 export async function POST(request: NextRequest) {
@@ -58,66 +164,67 @@ export async function POST(request: NextRequest) {
       return Response.json({ error: upload.error }, { status: 400 });
     }
 
-    const { buffer, filename } = upload;
+    const { buffer, filename, lang } = upload;
 
-    let pageCount = 0;
-    try {
-      const pdfDoc = await PDFDocument.load(buffer, { ignoreEncryption: true });
-      pageCount = pdfDoc.getPageCount();
-    } catch {
-      return Response.json({ error: 'Could not parse the uploaded PDF' }, { status: 400 });
+    if (!isPdf(buffer)) {
+      return Response.json({ error: 'The uploaded file is not a valid PDF' }, { status: 400 });
     }
 
-    if (pageCount === 0) {
-      return Response.json({ error: 'The uploaded PDF contains no pages' }, { status: 400 });
+    if (!which('ocrmypdf')) {
+      return Response.json(
+        { error: 'The OCR engine (ocrmypdf) is not installed on the server.' },
+        { status: 503 },
+      );
     }
 
-    let extracted = '';
+    const installed = await installedLanguages();
+    if (installed.length > 0 && !installed.includes(lang)) {
+      const label = OCR_LANGUAGES.find((l) => l.code === lang)?.label || lang;
+      return Response.json(
+        {
+          error: `The ${label} (${lang}) language pack is not installed on this server. Installed: ${installed.join(', ')}.`,
+        },
+        { status: 400 },
+      );
+    }
+
+    let searchable: Buffer;
     try {
-      extracted = (await extractPdfText(buffer)).trim();
+      searchable = await ocrPdf(buffer, lang, { timeoutMs: 540_000 });
     } catch (error) {
-      console.error('OCR text extraction error:', error);
-      return Response.json({ error: 'Could not read text from the uploaded PDF' }, { status: 400 });
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('OCR (ocrmypdf) error:', message);
+
+      if (/encrypted|password/i.test(message)) {
+        return Response.json(
+          { error: 'This PDF is password protected. Unlock it before running OCR.' },
+          { status: 422 },
+        );
+      }
+      if (/not installed|failed loading language|Error opening data file/i.test(message)) {
+        return Response.json(
+          { error: `The "${lang}" Tesseract language pack is missing on the server.` },
+          { status: 400 },
+        );
+      }
+      return Response.json(
+        { error: 'OCR failed for this PDF. It may be damaged or in an unsupported format.' },
+        { status: 422 },
+      );
     }
 
-    const pages = extracted ? extracted.split('\n\n') : [];
-    const header = [
-      `Text extraction for: ${filename}`,
-      `Pages: ${pageCount}`,
-      `Generated: ${new Date().toISOString()}`,
-      '',
-      'Note: this file contains the text layer that is already embedded in the PDF.',
-      'No optical character recognition (OCR) was performed on page images.',
-      '='.repeat(72),
-      '',
-    ].join('\n');
+    const body = new Uint8Array(searchable);
 
-    let body: string;
-    if (!extracted) {
-      body = [
-        'No embedded text was found in this PDF.',
-        '',
-        'The document is most likely a scan (page images only). Recognising text from',
-        'images requires an OCR engine, which is not available on this server, so no',
-        'text could be produced for this file.',
-      ].join('\n');
-    } else {
-      body = pages
-        .map((pageText, index) => {
-          const clean = pageText.replace(/[ \t]+/g, ' ').trim();
-          return `--- Page ${index + 1} ---\n${clean || '(no text on this page)'}`;
-        })
-        .join('\n\n');
-    }
-
-    const outName = `${filename.replace(/\.[^/.]+$/, '') || 'document'}.txt`;
-
-    return new Response(Buffer.from(`${header}${body}\n`, 'utf-8'), {
+    return new Response(body, {
       status: 200,
       headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        'Content-Disposition': `attachment; filename="${outName}"`,
+        'Content-Type': 'application/pdf',
+        'Content-Disposition': `attachment; filename="${outputName(filename)}"`,
+        'Content-Length': String(body.byteLength),
         'Cache-Control': 'no-store',
+        'X-Ocr-Language': lang,
+        'X-Original-Size': String(buffer.length),
+        'X-Output-Size': String(searchable.length),
       },
     });
   } catch (error) {

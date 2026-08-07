@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { Image, Upload, Download, CheckCircle2, AlertCircle, Info, X } from 'lucide-react';
+import { useState } from 'react';
+import { Image as ImageIcon, Upload, Download, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useToolState } from '@/hooks/useToolState';
 import {
   ToolPageShell,
@@ -16,70 +16,44 @@ import {
 import { Spinner } from '@/components/ui/Spinner';
 import { ProcessingModal } from '@/components/layout';
 
-interface PdfJsPage {
-  getViewport(opts: { scale: number }): { height: number; width: number };
-  render(opts: { canvasContext: CanvasRenderingContext2D; viewport: { height: number; width: number } }): {
-    promise: Promise<void>;
-  };
-}
-
-interface PdfJsDocument {
-  numPages: number;
-  getPage(n: number): Promise<PdfJsPage>;
-}
-
-interface PdfJsLib {
-  getDocument(opts: { data: Uint8Array }): {
-    promise: Promise<PdfJsDocument>;
-  };
-  GlobalWorkerOptions?: { workerSrc?: string };
-}
-
-interface PdfJsWindow {
-  pdfjsLib?: PdfJsLib;
-  GlobalWorkerOptions?: { workerSrc?: string };
-}
+const DPI_OPTIONS = [
+  { value: 72, label: '72 DPI', hint: 'Screen / smallest file' },
+  { value: 150, label: '150 DPI', hint: 'Balanced (recommended)' },
+  { value: 300, label: '300 DPI', hint: 'Print quality' },
+  { value: 600, label: '600 DPI', hint: 'Maximum detail' },
+];
 
 export default function PdfToJpgPage() {
-  const [images, setImages] = useState<string[]>([]);
+  const [dpi, setDpi] = useState(150);
+  const [format, setFormat] = useState<'jpg' | 'png'>('jpg');
+  const [quality, setQuality] = useState(90);
+  const [downloadUrl, setDownloadUrl] = useState('');
+  const [downloadName, setDownloadName] = useState('');
+  const [pageCount, setPageCount] = useState(0);
   const {
     step,
     setStep,
     file,
     setFile,
-                    isProcessing,
+    countdown,
+    setCountdown,
+    isProcessing,
     setIsProcessing,
     error,
     setError,
-        setSuccess,
+    setSuccess,
     goToOptions,
     goToDownload,
     resetAll,
   } = useToolState<Record<string, unknown>>();
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const existing = (window as unknown as PdfJsWindow).pdfjsLib;
-    if (!existing) {
-      const script = document.createElement('script');
-      script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.min.js';
-      script.onload = () => {
-        const win = window as unknown as PdfJsWindow;
-        if (win.pdfjsLib?.GlobalWorkerOptions) {
-          win.pdfjsLib.GlobalWorkerOptions.workerSrc =
-            'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.4.120/pdf.worker.min.js';
-        }
-      };
-      document.head.appendChild(script);
-    }
-  }, []);
-
-  const handleFile = (selected: File | null) => {
-    if (selected && selected.type === 'application/pdf') {
+  const handleFile = (files: FileList | null) => {
+    const selected = files?.[0] || null;
+    if (selected && (selected.type === 'application/pdf' || selected.name.toLowerCase().endsWith('.pdf'))) {
       setFile(selected);
       setError(null);
       setSuccess(false);
-      setImages([]);
+      setDownloadUrl('');
     } else {
       setError('Please upload a valid PDF file');
     }
@@ -100,33 +74,31 @@ export default function PdfToJpgPage() {
     setError(null);
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const bytes = new Uint8Array(arrayBuffer);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('dpi', String(dpi));
+      formData.append('format', format);
+      formData.append('quality', String(quality));
 
-      const win = window as unknown as PdfJsWindow;
-      if (!win.pdfjsLib) {
-        throw new Error('PDF library is still loading. Please try again.');
+      const res = await fetch('/api/tools/pdf-to-jpg', { method: 'POST', body: formData });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Conversion failed');
       }
 
-      const loadingTask = win.pdfjsLib.getDocument({ data: bytes });
-      const pdf = await loadingTask.promise;
-      const renderedImages: string[] = [];
+      const pages = Number(res.headers.get('X-Page-Count') || '0');
+      const blob = await res.blob();
+      if (blob.size === 0) throw new Error('Conversion produced an empty file');
 
-      for (let i = 1; i <= pdf.numPages; i++) {
-        const page = await pdf.getPage(i);
-        const viewport = page.getViewport({ scale: 2.0 });
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        if (!context) continue;
+      const base = file.name.replace(/\.[^/.]+$/, '') || 'document';
+      const isZip = blob.type === 'application/zip' || pages > 1;
 
-        canvas.height = viewport.height;
-        canvas.width = viewport.width;
-        await page.render({ canvasContext: context, viewport }).promise;
-        renderedImages.push(canvas.toDataURL('image/jpeg', 0.92));
-      }
-
-      setImages(renderedImages);
+      setPageCount(pages || 1);
+      setDownloadName(isZip ? `${base}-${format}.zip` : `${base}.${format}`);
+      setDownloadUrl(URL.createObjectURL(blob));
       setSuccess(true);
+      startCountdown();
       goToDownload();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to convert PDF to images');
@@ -135,16 +107,37 @@ export default function PdfToJpgPage() {
     }
   };
 
+  const startCountdown = () => {
+    let remaining = 10;
+    setCountdown(remaining);
+    const timer = setInterval(() => {
+      remaining -= 1;
+      setCountdown(remaining);
+      if (remaining <= 0) clearInterval(timer);
+    }, 1000);
+    return timer;
+  };
+
+  const handleDownload = () => {
+    if (!downloadUrl || countdown > 0) return;
+    const link = document.createElement('a');
+    link.href = downloadUrl;
+    link.download = downloadName;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const formatSize = (bytes: number) => {
     if (bytes === 0) return '0 Bytes';
     const k = 1024;
-    const sizes: string[] = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
   return (
-    <ToolPageShell title="PDF to JPG" description="Convert PDF pages to JPG images." icon={Image}>
+    <ToolPageShell title="PDF to JPG" description="Convert PDF pages to high-quality JPG or PNG images." icon={ImageIcon}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
         <ProcessingModal open={isProcessing} />
@@ -154,12 +147,8 @@ export default function PdfToJpgPage() {
           <div className="space-y-6">
             <ToolCard>
               <div className="text-center mb-6">
-                <h2 className="font-display font-bold text-xl text-brand-dark mb-2">
-                  Upload Your PDF
-                </h2>
-                <p className="text-sm text-gray-500">
-                  Select a PDF file to convert to JPG images
-                </p>
+                <h2 className="font-display font-bold text-xl text-brand-dark mb-2">Upload Your PDF</h2>
+                <p className="text-sm text-gray-500">Select a PDF file to convert into images</p>
               </div>
 
               {!file ? (
@@ -168,24 +157,19 @@ export default function PdfToJpgPage() {
                   title="Drop a PDF file here"
                   subtitle="or click to browse from your computer"
                   accept="application/pdf"
-                  onFiles={(files) => handleFile(files?.[0] || null)}
+                  onFiles={handleFile}
                 />
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-green-50 border border-green-100 rounded-2xl">
                     <div className="flex items-center gap-3">
                       <CheckCircle2 className="w-5 h-5 text-green-600" />
-                      <span className="text-sm font-semibold text-green-700">
-                        {file.name}
-                      </span>
+                      <span className="text-sm font-semibold text-green-700">{file.name}</span>
                     </div>
-                    <span className="text-xs text-gray-500">
-                      {formatSize(file.size)}
-                    </span>
+                    <span className="text-xs text-gray-500">{formatSize(file.size)}</span>
                   </div>
-
                   <button
-                    onClick={() => { setFile(null); setError(null); setImages([]); }}
+                    onClick={() => { setFile(null); setError(null); setDownloadUrl(''); }}
                     className="text-xs font-semibold text-red-500 hover:text-red-700 hover:bg-red-50 px-3 py-1.5 rounded-lg transition-all cursor-pointer"
                   >
                     Remove and select another file
@@ -204,11 +188,7 @@ export default function PdfToJpgPage() {
             </ToolCard>
 
             <div className="flex justify-end">
-              <ToolPrimaryButton
-                onClick={handleContinueToOptions}
-                disabled={!file}
-                className="min-w-[160px]"
-              >
+              <ToolPrimaryButton onClick={handleContinueToOptions} disabled={!file} className="min-w-[160px]">
                 Continue to Options
                 <Download className="w-4 h-4" />
               </ToolPrimaryButton>
@@ -221,12 +201,8 @@ export default function PdfToJpgPage() {
             <ToolCard>
               <div className="flex items-center justify-between mb-6">
                 <div>
-                  <h2 className="font-display font-bold text-xl text-brand-dark mb-1">
-                    Ready to Convert
-                  </h2>
-                  <p className="text-sm text-gray-500">
-                    Review your file and convert to images
-                  </p>
+                  <h2 className="font-display font-bold text-xl text-brand-dark mb-1">Image Settings</h2>
+                  <p className="text-sm text-gray-500">Pick the resolution and image format</p>
                 </div>
                 <button
                   onClick={() => setStep('upload')}
@@ -239,31 +215,87 @@ export default function PdfToJpgPage() {
               <div className="space-y-6">
                 <div className="flex items-center gap-4 p-4 bg-gray-50 rounded-2xl">
                   <div className="p-3 bg-white border border-gray-100 rounded-xl text-brand-red">
-                    <Image className="w-6 h-6" />
+                    <ImageIcon className="w-6 h-6" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-brand-dark truncate">
-                      {file?.name}
-                    </p>
-                    <p className="text-xs text-gray-500 mt-0.5">
-                      {formatSize(file?.size || 0)}
-                    </p>
+                    <p className="text-sm font-semibold text-brand-dark truncate">{file?.name}</p>
+                    <p className="text-xs text-gray-500 mt-0.5">{formatSize(file?.size || 0)}</p>
                   </div>
                 </div>
+
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">Resolution (DPI)</p>
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    {DPI_OPTIONS.map((option) => (
+                      <button
+                        key={option.value}
+                        type="button"
+                        onClick={() => setDpi(option.value)}
+                        className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                          dpi === option.value ? 'border-brand-red bg-red-50/50' : 'border-gray-100 hover:border-gray-200'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-brand-dark">{option.label}</span>
+                        <span className="block text-[11px] text-gray-500 mt-0.5 leading-tight">{option.hint}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">Image format</p>
+                  <div className="grid grid-cols-2 gap-3">
+                    {(['jpg', 'png'] as const).map((value) => (
+                      <button
+                        key={value}
+                        type="button"
+                        onClick={() => setFormat(value)}
+                        className={`p-3 rounded-2xl border-2 text-left transition-all cursor-pointer ${
+                          format === value ? 'border-brand-red bg-red-50/50' : 'border-gray-100 hover:border-gray-200'
+                        }`}
+                      >
+                        <span className="block text-sm font-semibold text-brand-dark uppercase">{value}</span>
+                        <span className="block text-[11px] text-gray-500 mt-0.5 leading-tight">
+                          {value === 'jpg' ? 'Smaller files, photo friendly' : 'Lossless, sharp text'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {format === 'jpg' && (
+                  <div>
+                    <div className="flex items-center justify-between mb-2">
+                      <label htmlFor="jpg-quality" className="text-xs font-bold uppercase tracking-wider text-gray-500">
+                        JPG quality
+                      </label>
+                      <span className="text-xs font-semibold text-brand-dark">{quality}%</span>
+                    </div>
+                    <input
+                      id="jpg-quality"
+                      type="range"
+                      min={40}
+                      max={100}
+                      step={5}
+                      value={quality}
+                      onChange={(e) => setQuality(Number(e.target.value))}
+                      className="w-full accent-[var(--brand-red,#e5322d)] cursor-pointer"
+                    />
+                  </div>
+                )}
 
                 <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl">
                   <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                   <p className="text-xs text-blue-700 leading-relaxed">
-                    Each page of your PDF will be converted to a high-quality JPG image. You can download individual pages after conversion.
+                    Pages are rendered on the server with poppler (pdftoppm). Multi-page PDFs download as a ZIP archive; a
+                    single-page PDF downloads as one image.
                   </p>
                 </div>
               </div>
             </ToolCard>
 
             <div className="flex justify-end gap-3">
-              <ToolSecondaryButton onClick={() => setStep('upload')}>
-                Back
-              </ToolSecondaryButton>
+              <ToolSecondaryButton onClick={() => setStep('upload')}>Back</ToolSecondaryButton>
               <ToolPrimaryButton onClick={handleConvert} loading={isProcessing}>
                 {isProcessing ? (
                   <>
@@ -272,7 +304,7 @@ export default function PdfToJpgPage() {
                   </>
                 ) : (
                   <>
-                    <Image className="w-5 h-5 shrink-0" />
+                    <ImageIcon className="w-5 h-5 shrink-0" />
                     <span>Convert to Images</span>
                   </>
                 )}
@@ -288,35 +320,28 @@ export default function PdfToJpgPage() {
                 <CheckCircle2 className="w-10 h-10 text-green-600" />
               </div>
               <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">
-                Converted to Images Successfully!
+                Images Ready!
               </h2>
               <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">
-                Your PDF has been converted to {images.length} JPG image{images.length !== 1 ? 's' : ''}. Click on any image below to download it.
+                {pageCount > 1
+                  ? `${pageCount} pages were rendered at ${dpi} DPI and packed into a ZIP archive.`
+                  : `Your page was rendered at ${dpi} DPI as a single ${format.toUpperCase()} image.`}
               </p>
 
-              {images.length > 0 && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 max-w-2xl mx-auto mb-8">
-                  {images.map((src, index) => (
-                    <a
-                      key={index}
-                      href={src}
-                      download={`page-${index + 1}.jpg`}
-                      className="group relative"
-                    >
-                      <img
-                        src={src}
-                        alt={`Page ${index + 1}`}
-                        className="w-full h-40 object-cover rounded-2xl border border-gray-100 group-hover:border-brand-red transition-colors"
-                      />
-                      <div className="absolute inset-0 flex items-center justify-center bg-black/40 text-white font-medium opacity-0 group-hover:opacity-100 transition-opacity rounded-2xl">
-                        Download
-                      </div>
-                    </a>
-                  ))}
-                </div>
-              )}
-
               <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
+                <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
+                  {countdown > 0 ? (
+                    <>
+                      <Spinner size={24} color="#ffffff" className="shrink-0" />
+                      <span>Please wait {countdown}s...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Download className="w-5 h-5 shrink-0" />
+                      <span>{pageCount > 1 ? 'Download ZIP' : 'Download Image'}</span>
+                    </>
+                  )}
+                </ToolPrimaryButton>
                 <ToolSecondaryButton onClick={resetAll} className="flex-1">
                   <Upload className="w-5 h-5 shrink-0" />
                   <span>Convert Another PDF</span>

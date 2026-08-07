@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Table, Upload, Download, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useToolState } from '@/hooks/useToolState';
 import {
@@ -15,6 +14,9 @@ import {
 } from '@/components/layout';
 import { Spinner } from '@/components/ui/Spinner';
 import { ProcessingModal } from '@/components/layout';
+
+// Anything LibreOffice Calc can open and export straight to PDF.
+const ACCEPTED_EXTENSIONS = ['.xls', '.xlsx', '.xlsm', '.xlt', '.xltx', '.ods', '.ots', '.csv', '.tsv'];
 
 export default function ExcelToPdfPage() {
   const {
@@ -38,20 +40,19 @@ export default function ExcelToPdfPage() {
 
   const handleFile = (selected: FileList | null) => {
     const selectedFile = selected?.[0] || null;
-    const validTypes = ['application/vnd.ms-excel', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
-    const validExt = selectedFile?.name.endsWith('.xls') || selectedFile?.name.endsWith('.xlsx');
-    if (selectedFile && (validTypes.includes(selectedFile.type) || validExt)) {
+    const validExt = ACCEPTED_EXTENSIONS.some((ext) => selectedFile?.name.toLowerCase().endsWith(ext));
+    if (selectedFile && validExt) {
       setFile(selectedFile);
       setError(null);
       setSuccess(false);
     } else {
-      setError('Please upload a valid Excel file (.xls or .xlsx)');
+      setError('Please upload a valid Excel file (.xls, .xlsx, .ods or .csv)');
     }
   };
 
   const handleContinueToOptions = () => {
     if (!file) {
-      setError('Please select a file to continue');
+      setError('Please select a spreadsheet to continue');
       return;
     }
     setError(null);
@@ -69,8 +70,11 @@ export default function ExcelToPdfPage() {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Conversion failed');
+      // The API streams back a binary PDF; only error payloads are JSON.
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Conversion failed');
+      }
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       setResult(url);
@@ -99,7 +103,7 @@ export default function ExcelToPdfPage() {
     if (!result || countdown > 0) return;
     const link = document.createElement('a');
     link.href = result;
-    link.download = 'converted.pdf';
+    link.download = file ? `${file.name.replace(/\.[^/.]+$/, '')}.pdf` : 'converted.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -125,10 +129,10 @@ export default function ExcelToPdfPage() {
             <ToolCard>
               <div className="text-center mb-6">
                 <h2 className="font-display font-bold text-xl text-brand-dark mb-2">Upload Your File</h2>
-                <p className="text-sm text-gray-500">Select a file to get started</p>
+                <p className="text-sm text-gray-500">Select a spreadsheet to get started</p>
               </div>
               {!file ? (
-                <ToolUploadZone icon={Upload} title="Drop a file here" subtitle="or click to browse" accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" onFiles={handleFile} />
+                <ToolUploadZone icon={Upload} title="Drop a file here" subtitle="or click to browse (.xls, .xlsx, .ods, .csv)" accept={ACCEPTED_EXTENSIONS.join(',')} onFiles={handleFile} />
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-green-50 border border-green-100 rounded-2xl">
@@ -177,7 +181,7 @@ export default function ExcelToPdfPage() {
               </div>
               <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl mt-4">
                 <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-blue-700 leading-relaxed">Ready to process your file. Click the button below to start.</p>
+                <p className="text-xs text-blue-700 leading-relaxed">No options needed — your spreadsheet is rendered to PDF with LibreOffice, preserving layout, formatting and page breaks.</p>
               </div>
             </ToolCard>
             <div className="flex justify-end gap-3">

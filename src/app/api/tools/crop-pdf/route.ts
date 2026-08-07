@@ -1,70 +1,133 @@
 import { NextRequest } from 'next/server';
-import { PDFDocument } from 'pdf-lib';
-import { base64ToBytes, bytesToBase64 } from '@/lib/pdfUtils';
+import {
+  ToolRequestError,
+  clamp,
+  getPageView,
+  loadPdf,
+  pdfResponse,
+  readPdfUpload,
+  suffixFilename,
+  toNumber,
+  toolErrorResponse,
+  viewToUser,
+} from '@/lib/pdfEdit';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
-function toMargin(value: unknown): number {
-  const num = Number(value);
-  if (!Number.isFinite(num) || num <= 0) return 0;
-  return num;
+interface FractionMargins {
+  left: number;
+  top: number;
+  right: number;
+  bottom: number;
 }
 
+function readCropFractions(options: Record<string, unknown>): FractionMargins | null {
+  const raw = options.crop;
+  const source =
+    typeof raw === 'string'
+      ? (() => {
+          try {
+            return JSON.parse(raw) as Record<string, unknown>;
+          } catch {
+            return null;
+          }
+        })()
+      : (raw as Record<string, unknown> | undefined);
+
+  if (!source || typeof source !== 'object') return null;
+
+  const left = clamp(toNumber(source.left, 0), 0, 0.98);
+  const top = clamp(toNumber(source.top, 0), 0, 0.98);
+  const right = clamp(toNumber(source.right, 0), 0, 0.98);
+  const bottom = clamp(toNumber(source.bottom, 0), 0, 0.98);
+
+  if (left + right >= 0.99 || top + bottom >= 0.99) {
+    throw new ToolRequestError('The crop box is too small');
+  }
+
+  return { left, top, right, bottom };
+}
+
+/**
+ * Crop PDF — pdf-lib.
+ *
+ * The canvas UI sends the crop box as fractions of the rendered page so the
+ * same box can be applied to pages of different sizes and rotations:
+ *
+ *   options: {
+ *     crop: { left, top, right, bottom }   // 0..1 margins measured in view space
+ *     applyToAll?: boolean                 // default true
+ *     pageIndex?: number                   // page the box was drawn on
+ *   }
+ *
+ * Absolute point margins (`{ top, bottom, left, right }`) are still accepted.
+ */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    // The page sends the margins at the top level: { file, top, bottom, left, right }.
-    // A nested `margins` object is still accepted for backwards compatibility.
-    const { file, margins } = body ?? {};
+    const { bytes, options, filename } = await readPdfUpload(request);
 
-    if (!file) {
-      return Response.json({ error: 'PDF file is required' }, { status: 400 });
-    }
-
-    const marginTop = toMargin(body?.top ?? margins?.top);
-    const marginBottom = toMargin(body?.bottom ?? margins?.bottom);
-    const marginLeft = toMargin(body?.left ?? margins?.left);
-    const marginRight = toMargin(body?.right ?? margins?.right);
-
-    const bytes = base64ToBytes(file);
-    const pdfDoc = await PDFDocument.load(bytes);
-
+    const pdfDoc = await loadPdf(bytes);
     const pages = pdfDoc.getPages();
-    if (pages.length === 0) {
-      return Response.json({ error: 'The PDF has no pages to crop' }, { status: 400 });
+
+    const fractions = readCropFractions(options);
+    const applyToAll = options.applyToAll === undefined ? true : options.applyToAll === true || options.applyToAll === 'true';
+    const pageIndex = clamp(Math.round(toNumber(options.pageIndex, 0)), 0, pages.length - 1);
+    const targets = applyToAll ? pages.map((_, i) => i) : [pageIndex];
+
+    // Legacy: absolute margins in points, in view space of an unrotated page.
+    const absolute = {
+      top: Math.max(0, toNumber(options.top, 0)),
+      bottom: Math.max(0, toNumber(options.bottom, 0)),
+      left: Math.max(0, toNumber(options.left, 0)),
+      right: Math.max(0, toNumber(options.right, 0)),
+    };
+
+    if (!fractions && absolute.top === 0 && absolute.bottom === 0 && absolute.left === 0 && absolute.right === 0) {
+      throw new ToolRequestError('Set a crop area before cropping');
     }
 
-    for (const page of pages) {
-      const mediaBox = page.getMediaBox();
+    for (const index of targets) {
+      const page = pages[index];
+      const view = getPageView(page);
 
-      const newX = mediaBox.x + marginLeft;
-      const newY = mediaBox.y + marginBottom;
-      const newWidth = mediaBox.width - marginLeft - marginRight;
-      const newHeight = mediaBox.height - marginBottom - marginTop;
+      const margins = fractions
+        ? {
+            left: fractions.left * view.width,
+            right: fractions.right * view.width,
+            top: fractions.top * view.height,
+            bottom: fractions.bottom * view.height,
+          }
+        : absolute;
 
-      if (newWidth <= 0 || newHeight <= 0) {
-        return Response.json({ error: 'Crop margins exceed page dimensions' }, { status: 400 });
+      // Corners of the crop box in view space, mapped back into user space.
+      const a = viewToUser(view, margins.left, margins.top);
+      const b = viewToUser(view, view.width - margins.right, view.height - margins.bottom);
+
+      const x = Math.min(a.x, b.x);
+      const y = Math.min(a.y, b.y);
+      const width = Math.abs(b.x - a.x);
+      const height = Math.abs(b.y - a.y);
+
+      if (width < 10 || height < 10) {
+        throw new ToolRequestError('The crop area is too small (minimum 10 x 10 points)');
       }
 
-      page.setMediaBox(newX, newY, newWidth, newHeight);
-      page.setCropBox(newX, newY, newWidth, newHeight);
-      // Keep the remaining boxes inside the new media box so viewers agree on the crop.
-      page.setBleedBox(newX, newY, newWidth, newHeight);
-      page.setTrimBox(newX, newY, newWidth, newHeight);
-      page.setArtBox(newX, newY, newWidth, newHeight);
+      page.setMediaBox(x, y, width, height);
+      page.setCropBox(x, y, width, height);
+      // Keep the remaining boxes inside the new media box so viewers agree.
+      page.setBleedBox(x, y, width, height);
+      page.setTrimBox(x, y, width, height);
+      page.setArtBox(x, y, width, height);
     }
 
     const out = await pdfDoc.save();
-    const dataUrl = bytesToBase64(out);
 
-    return Response.json({
-      dataUrl,
-      filename: 'cropped.pdf',
-      pageCount: pages.length,
-      margins: { top: marginTop, bottom: marginBottom, left: marginLeft, right: marginRight },
+    return pdfResponse(out, suffixFilename(filename, 'cropped'), {
+      'X-Page-Count': String(pages.length),
+      'X-Pages-Cropped': String(targets.length),
     });
   } catch (error) {
-    console.error('Crop error:', error);
-    return Response.json({ error: 'Failed to crop PDF' }, { status: 500 });
+    return toolErrorResponse(error, 'Failed to crop PDF');
   }
 }

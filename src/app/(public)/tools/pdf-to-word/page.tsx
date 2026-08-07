@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { FileEdit, Upload, Download, CheckCircle2, AlertCircle, Info } from 'lucide-react';
+import { FileEdit, Upload, Download, CheckCircle2, AlertCircle, Info, LayoutTemplate, AlignLeft } from 'lucide-react';
 import { useToolState } from '@/hooks/useToolState';
 import {
   ToolPageShell,
@@ -19,6 +19,7 @@ import { ProcessingModal } from '@/components/layout';
 export default function PdfToWordPage() {
   const [docxUrl, setDocxUrl] = useState<string>('');
   const [docxName, setDocxName] = useState<string>('converted.docx');
+  const [mode, setMode] = useState<'layout' | 'text'>('layout');
   const {
     step,
     setStep,
@@ -63,18 +64,13 @@ export default function PdfToWordPage() {
     setError(null);
 
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-      });
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('mode', mode);
 
-      const cleanBase64 = base64.split(',')[1] || base64;
       const res = await fetch('/api/tools/pdf-to-word', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pdfBase64: cleanBase64 }),
+        body: formData,
       });
 
       if (!res.ok) {
@@ -94,7 +90,7 @@ export default function PdfToWordPage() {
       startCountdown();
       goToDownload();
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to extract text from PDF');
+      setError(err instanceof Error ? err.message : 'Failed to convert PDF to Word');
     } finally {
       setIsProcessing(false);
     }
@@ -211,10 +207,10 @@ export default function PdfToWordPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="font-display font-bold text-xl text-brand-dark mb-1">
-                    Ready to Extract
+                    Conversion Settings
                   </h2>
                   <p className="text-sm text-gray-500">
-                    Review your file and extract text
+                    Choose how the Word document should be built
                   </p>
                 </div>
                 <button
@@ -240,10 +236,55 @@ export default function PdfToWordPage() {
                   </div>
                 </div>
 
+                <div>
+                  <p className="text-xs font-bold uppercase tracking-wider text-gray-500 mb-3">
+                    Output style
+                  </p>
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    <button
+                      type="button"
+                      onClick={() => setMode('layout')}
+                      className={`text-left p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                        mode === 'layout'
+                          ? 'border-brand-red bg-red-50/50'
+                          : 'border-gray-100 hover:border-gray-200'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold text-brand-dark">
+                        <LayoutTemplate className="w-4 h-4 text-brand-red" />
+                        Preserve layout
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-1 leading-relaxed">
+                        Keeps columns, tables and positioning as close to the PDF as possible.
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setMode('text')}
+                      className={`text-left p-4 rounded-2xl border-2 transition-all cursor-pointer ${
+                        mode === 'text'
+                          ? 'border-brand-red bg-red-50/50'
+                          : 'border-gray-100 hover:border-gray-200'
+                      }`}
+                    >
+                      <span className="flex items-center gap-2 text-sm font-semibold text-brand-dark">
+                        <AlignLeft className="w-4 h-4 text-brand-red" />
+                        Editable text flow
+                      </span>
+                      <span className="block text-xs text-gray-500 mt-1 leading-relaxed">
+                        Plain, reflowable paragraphs that are easiest to edit in Word.
+                      </span>
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl">
                   <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                   <p className="text-xs text-blue-700 leading-relaxed">
-                     Your PDF will be converted into a real, editable Word (.docx) file using LibreOffice. Layout, paragraphs, and text are preserved for download.
+                    {mode === 'layout'
+                      ? 'Layout mode rebuilds tables and text frames with pdf2docx so the page looks like the original.'
+                      : 'Text mode imports the PDF through LibreOffice Writer, producing clean editable paragraphs.'}
                   </p>
                 </div>
               </div>
@@ -257,12 +298,12 @@ export default function PdfToWordPage() {
                 {isProcessing ? (
                   <>
                     <Spinner size={24} color="#ffffff" className="shrink-0" />
-                    <span>Extracting...</span>
+                    <span>Converting...</span>
                   </>
                 ) : (
                   <>
                     <FileEdit className="w-5 h-5 shrink-0" />
-                    <span>Extract Text</span>
+                    <span>Convert to Word</span>
                   </>
                 )}
               </ToolPrimaryButton>
@@ -277,10 +318,10 @@ export default function PdfToWordPage() {
                 <CheckCircle2 className="w-10 h-10 text-green-600" />
               </div>
               <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">
-                Text Extracted Successfully!
+                Converted to Word Successfully!
               </h2>
               <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">
-                Text has been extracted from your PDF. Preview the output below and download when ready.
+                Your PDF is now an editable Word document. Download it below.
               </p>
 
               <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto mb-8">
@@ -299,7 +340,7 @@ export default function PdfToWordPage() {
                 </ToolPrimaryButton>
                 <ToolSecondaryButton onClick={resetAll} className="flex-1">
                   <Upload className="w-5 h-5 shrink-0" />
-                  <span>Extract Another</span>
+                  <span>Convert Another</span>
                 </ToolSecondaryButton>
               </div>
 

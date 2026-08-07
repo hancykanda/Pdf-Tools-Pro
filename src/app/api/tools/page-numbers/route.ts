@@ -1,52 +1,114 @@
 import { NextRequest } from 'next/server';
-import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
-import { base64ToBytes, bytesToBase64 } from '@/lib/pdfUtils';
+import { degrees } from 'pdf-lib';
+import {
+  ToolRequestError,
+  centeredPlacement,
+  clamp,
+  createFontLoader,
+  getPageView,
+  loadPdf,
+  normalizePosition,
+  parseColor,
+  pdfResponse,
+  presetCenter,
+  readPdfUpload,
+  resolveFontKey,
+  sanitizeWinAnsi,
+  suffixFilename,
+  toNumber,
+  toolErrorResponse,
+  viewToUser,
+} from '@/lib/pdfEdit';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
+const FORMAT_PRESETS: Record<string, string> = {
+  n: '{n}',
+  number: '{n}',
+  'page-n': 'Page {n}',
+  'page-n-of-total': 'Page {n} of {total}',
+  'n-of-total': '{n} of {total}',
+  'dash-n': '- {n} -',
+};
+
+function buildLabel(template: string, current: number, total: number): string {
+  return template
+    .replace(/\{n\}/gi, String(current))
+    .replace(/\{total\}/gi, String(total))
+    .replace(/\{page\}/gi, String(current))
+    .replace(/\{pages\}/gi, String(total));
+}
+
+/**
+ * Add page numbers — pdf-lib.
+ *
+ * options: {
+ *   position: 'bottom-center' | 'top-right' | ... (9 corner/edge presets)
+ *   startNumber: number          // value printed on the first numbered page
+ *   format: '{n}' | 'Page {n}' | '{n} of {total}' | '- {n} -' | preset key
+ *   fontSize, margin, fontFamily, color, bold
+ *   firstPage, lastPage          // 1-based inclusive range to number
+ * }
+ */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { file, startPage } = body;
+    const { bytes, options, filename } = await readPdfUpload(request);
 
-    if (!file) {
-      return Response.json({ error: 'PDF file is required' }, { status: 400 });
+    const pdfDoc = await loadPdf(bytes);
+    const pages = pdfDoc.getPages();
+
+    const position = normalizePosition(options.position, 'bottom-center');
+    const startNumber = Math.max(0, Math.round(toNumber(options.startNumber ?? options.startPage, 1)));
+    const fontSize = clamp(toNumber(options.fontSize, 12), 4, 96);
+    const margin = clamp(toNumber(options.margin, 24), 0, 200);
+    const color = parseColor(options.color, undefined);
+    const fontKey = resolveFontKey(options.fontFamily, options.bold);
+
+    const firstPage = clamp(Math.round(toNumber(options.firstPage, 1)), 1, pages.length);
+    const lastPage = clamp(Math.round(toNumber(options.lastPage, pages.length)), firstPage, pages.length);
+
+    const rawFormat = String(options.format ?? '{n}').trim() || '{n}';
+    const template = FORMAT_PRESETS[rawFormat.toLowerCase()] ?? rawFormat;
+    if (!/\{n\}|\{page\}/i.test(template)) {
+      throw new ToolRequestError('The format must contain {n} where the page number goes');
     }
 
-    const startAt = Math.max(1, Number(startPage) || 1);
+    const getFont = createFontLoader(pdfDoc);
+    const font = await getFont(fontKey);
 
-    const bytes = base64ToBytes(file);
-    const pdfDoc = await PDFDocument.load(bytes);
+    const numbered = lastPage - firstPage + 1;
+    const total = startNumber + numbered - 1;
 
-    const pages = pdfDoc.getPages();
-    const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+    for (let index = firstPage - 1; index <= lastPage - 1; index++) {
+      const page = pages[index];
+      const view = getPageView(page);
+      const label = sanitizeWinAnsi(buildLabel(template, startNumber + (index - (firstPage - 1)), total));
+      if (!label) continue;
 
-    for (let i = 0; i < pages.length; i++) {
-      const page = pages[i];
-      const pageNumber = i + 1;
-      if (pageNumber < startAt) continue;
+      const textWidth = font.widthOfTextAtSize(label, fontSize);
+      const center = presetCenter(position, view.width, view.height, textWidth, fontSize, margin);
+      const centerUser = viewToUser(view, center.x, center.y);
+      // 0.7em is roughly the cap height, which is what the eye centres on.
+      const origin = centeredPlacement(centerUser, textWidth, fontSize * 0.7, view.rotation);
 
-      const { width } = page.getSize();
-      const fontSize = 12;
-      const pageNumText = String(pageNumber);
-
-      const textWidth = font.widthOfTextAtSize(pageNumText, fontSize);
-
-      page.drawText(pageNumText, {
-        x: width - textWidth - 20,
-        y: 20,
+      page.drawText(label, {
+        x: origin.x,
+        y: origin.y,
         size: fontSize,
         font,
-        color: rgb(0, 0, 0),
+        color,
+        rotate: degrees(view.rotation),
       });
     }
 
     const out = await pdfDoc.save();
-    const dataUrl = bytesToBase64(out);
 
-    return Response.json({ dataUrl, filename: 'page-numbers.pdf' });
+    return pdfResponse(out, suffixFilename(filename, 'numbered'), {
+      'X-Page-Count': String(pages.length),
+      'X-Pages-Numbered': String(numbered),
+    });
   } catch (error) {
-    console.error('Page numbers error:', error);
-    return Response.json({ error: 'Failed to add page numbers' }, { status: 500 });
+    return toolErrorResponse(error, 'Failed to add page numbers');
   }
 }

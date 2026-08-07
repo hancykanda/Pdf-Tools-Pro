@@ -51,7 +51,9 @@ import {
 const tools = [
   { name: 'Merge PDF', href: '/tools/merge', description: 'Combine multiple PDFs into one', icon: MergePdfIcon, category: 'organize' },
   { name: 'Split PDF', href: '/tools/split', description: 'Extract pages from PDFs', icon: SplitPdfIcon, category: 'organize' },
-  { name: 'Organize PDF', href: '/tools/organize-pdf', description: 'Reorder, add, or delete pages', icon: OrganizePdfIcon, category: 'organize' },
+  { name: 'Organize PDF', href: '/tools/organize-pdf', description: 'Reorder, rotate, or delete pages', icon: OrganizePdfIcon, category: 'organize' },
+  { name: 'Remove Pages', href: '/tools/remove-pages', description: 'Delete unwanted pages from a PDF', icon: OrganizePdfIcon, category: 'organize' },
+  { name: 'Extract Pages', href: '/tools/extract-pages', description: 'Save selected pages as a new PDF', icon: SplitPdfIcon, category: 'organize' },
   { name: 'Compare PDF', href: '/tools/compare-pdf', description: 'Compare two PDF files', icon: ComparePdfIcon, category: 'organize' },
 
   { name: 'Compress PDF', href: '/tools/compress', description: 'Reduce PDF file size', icon: CompressPdfIcon, category: 'optimize' },

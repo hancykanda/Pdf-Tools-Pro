@@ -1,55 +1,65 @@
 import { NextRequest } from 'next/server';
-import { extractPdfText } from '@/lib/pdfText';
+
+import { extractPdfPageTexts } from '@/lib/pdfText';
+import { diffText } from '@/lib/textDiff';
+import {
+  errorResponse,
+  getPdfFromPayload,
+  looksLikePdf,
+  readToolRequest,
+} from '@/lib/securityTools';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
-function computeSimpleDiff(text1: string, text2: string) {
-  const lines1 = text1.split('\n');
-  const lines2 = text2.split('\n');
-  const result: Array<{ type: 'added' | 'removed' | 'unchanged'; text: string }> = [];
-
-  const maxLen = Math.max(lines1.length, lines2.length);
-  for (let i = 0; i < maxLen; i++) {
-    const l1 = lines1[i];
-    const l2 = lines2[i];
-
-    if (l1 === undefined) {
-      result.push({ type: 'added', text: l2 });
-    } else if (l2 === undefined) {
-      result.push({ type: 'removed', text: l1 });
-    } else if (l1 === l2) {
-      result.push({ type: 'unchanged', text: l1 });
-    } else {
-      result.push({ type: 'removed', text: l1 });
-      result.push({ type: 'added', text: l2 });
-    }
-  }
-
-  return result;
-}
-
+/**
+ * Compare PDF — pdf.js text extraction + LCS diff.
+ *
+ * Visual tool only: the response is JSON describing the differences, there is
+ * no output file.
+ */
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { file1, file2 } = body;
+    const payload = await readToolRequest(request);
 
-    if (!file1 || !file2) {
-      return Response.json({ error: 'Two PDF files are required' }, { status: 400 });
+    const bytes1 = getPdfFromPayload(payload, 'file1');
+    const bytes2 = getPdfFromPayload(payload, 'file2');
+
+    if (!bytes1 || !bytes2) {
+      return errorResponse('Two PDF files are required');
+    }
+    if (!looksLikePdf(bytes1) || !looksLikePdf(bytes2)) {
+      return errorResponse('Both uploads must be valid PDF files');
     }
 
-    const cleanBase64 = (base64: string) => base64.split(',')[1] || base64;
+    const [pages1, pages2] = await Promise.all([
+      extractPdfPageTexts(Buffer.from(bytes1)),
+      extractPdfPageTexts(Buffer.from(bytes2)),
+    ]);
 
-    const buffer1 = Buffer.from(cleanBase64(file1), 'base64');
-    const text1 = (await extractPdfText(buffer1)) || '';
+    const text1 = pages1.join('\n\n');
+    const text2 = pages2.join('\n\n');
 
-    const buffer2 = Buffer.from(cleanBase64(file2), 'base64');
-    const text2 = (await extractPdfText(buffer2)) || '';
+    const { rows, summary, flat } = diffText(text1, text2);
 
-    const diff = computeSimpleDiff(text1, text2);
+    const hasText = text1.trim().length > 0 || text2.trim().length > 0;
 
-    return Response.json({ text1, text2, diff });
+    return Response.json({
+      text1,
+      text2,
+      pageCount1: pages1.length,
+      pageCount2: pages2.length,
+      rows,
+      summary,
+      identical: summary.added + summary.removed + summary.changed === 0,
+      // Legacy flat shape kept so older clients keep working.
+      diff: flat,
+      warning: hasText
+        ? undefined
+        : 'No selectable text was found in these PDFs — they may be scanned images. Run OCR first for a meaningful comparison.',
+    });
   } catch (error) {
     console.error('Compare error:', error);
-    return Response.json({ error: 'Failed to compare PDFs' }, { status: 500 });
+    return errorResponse('Failed to compare PDFs', 500);
   }
 }

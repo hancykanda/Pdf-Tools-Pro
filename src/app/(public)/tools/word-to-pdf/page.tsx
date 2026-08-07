@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { FileText, Upload, Download, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useToolState } from '@/hooks/useToolState';
 import {
@@ -15,6 +14,9 @@ import {
 } from '@/components/layout';
 import { Spinner } from '@/components/ui/Spinner';
 import { ProcessingModal } from '@/components/layout';
+
+// Anything LibreOffice Writer can open and export straight to PDF.
+const ACCEPTED_EXTENSIONS = ['.doc', '.docx', '.docm', '.dot', '.dotx', '.odt', '.ott', '.rtf', '.txt'];
 
 export default function WordToPdfPage() {
   const {
@@ -38,12 +40,13 @@ export default function WordToPdfPage() {
 
   const handleFile = (selected: FileList | null) => {
     const selectedFile = selected?.[0] || null;
-    if (selectedFile && (selectedFile.name.endsWith('.docx') || selectedFile.name.endsWith('.doc'))) {
+    const validExt = ACCEPTED_EXTENSIONS.some((ext) => selectedFile?.name.toLowerCase().endsWith(ext));
+    if (selectedFile && validExt) {
       setFile(selectedFile);
       setError(null);
       setSuccess(false);
     } else {
-      setError('Please upload a valid Word document (.docx or .doc)');
+      setError('Please upload a valid Word document (.doc, .docx, .odt, .rtf or .txt)');
     }
   };
 
@@ -99,7 +102,7 @@ export default function WordToPdfPage() {
     if (!result || countdown > 0) return;
     const link = document.createElement('a');
     link.href = result;
-    link.download = 'converted.pdf';
+    link.download = file ? `${file.name.replace(/\.[^/.]+$/, '')}.pdf` : 'converted.pdf';
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -125,10 +128,10 @@ export default function WordToPdfPage() {
             <ToolCard>
               <div className="text-center mb-6">
                 <h2 className="font-display font-bold text-xl text-brand-dark mb-2">Upload Your File</h2>
-                <p className="text-sm text-gray-500">Select a file to get started</p>
+                <p className="text-sm text-gray-500">Select a Word document to get started</p>
               </div>
               {!file ? (
-                <ToolUploadZone icon={Upload} title="Drop a file here" subtitle="or click to browse" accept=".docx,.doc,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document" onFiles={handleFile} />
+                <ToolUploadZone icon={Upload} title="Drop a file here" subtitle="or click to browse (.doc, .docx, .odt, .rtf)" accept={ACCEPTED_EXTENSIONS.join(',')} onFiles={handleFile} />
               ) : (
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-green-50 border border-green-100 rounded-2xl">
@@ -177,7 +180,7 @@ export default function WordToPdfPage() {
               </div>
               <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl mt-4">
                 <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-blue-700 leading-relaxed">Ready to process your file. Click the button below to start.</p>
+                <p className="text-xs text-blue-700 leading-relaxed">No options needed — your document is rendered to PDF with LibreOffice, preserving fonts, images and page layout.</p>
               </div>
             </ToolCard>
             <div className="flex justify-end gap-3">

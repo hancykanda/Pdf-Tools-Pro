@@ -17,6 +17,7 @@ import { Spinner } from '@/components/ui/Spinner';
 import { ProcessingModal } from '@/components/layout';
 
 export default function RepairPdfPage() {
+  const [repairMethod, setRepairMethod] = useState<string | null>(null);
   const {
     step,
     setStep,
@@ -30,11 +31,13 @@ export default function RepairPdfPage() {
     setIsProcessing,
     error,
     setError,
-        setSuccess,
+    setSuccess,
     goToOptions,
     goToDownload,
     resetAll,
-  } = useToolState<Record<string, unknown>>();
+  } = useToolState<Record<string, unknown>>({
+    onReset: () => setRepairMethod(null),
+  });
 
   const handleFile = (selected: FileList | null) => {
     const selectedFile = selected?.[0] || null;
@@ -61,20 +64,22 @@ export default function RepairPdfPage() {
     setIsProcessing(true);
     setError(null);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-      });
+      const formData = new FormData();
+      formData.append('file', file);
+
       const res = await fetch('/api/tools/repair-pdf', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: base64 }),
+        body: formData,
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Repair failed');
-      setResult(data.dataUrl);
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Repair failed');
+      }
+
+      const blob = await res.blob();
+      setRepairMethod(res.headers.get('X-Repair-Method'));
+      setResult(URL.createObjectURL(blob));
       setSuccess(true);
       startCountdown();
       goToDownload();
@@ -100,7 +105,7 @@ export default function RepairPdfPage() {
     if (!result || countdown > 0) return;
     const link = document.createElement('a');
     link.href = result;
-    link.download = 'repaired.pdf';
+    link.download = `${(file?.name || 'document').replace(/\.pdf$/i, '')}-repaired.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -118,7 +123,11 @@ export default function RepairPdfPage() {
     <ToolPageShell title="Repair PDF" description="Fix corrupted or damaged PDF files." icon={Wrench}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
-        <ProcessingModal open={isProcessing} />
+        <ProcessingModal
+          open={isProcessing}
+          message="Repairing your PDF..."
+          submessage="Rebuilding the document structure. Keep this tab open."
+        />
         <div key={step} className="animate-slide-up">
 
         {step === 'upload' && (
@@ -178,7 +187,10 @@ export default function RepairPdfPage() {
               </div>
               <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl mt-4">
                 <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-blue-700 leading-relaxed">Ready to process your file. Click the button below to start.</p>
+                <p className="text-xs text-blue-700 leading-relaxed">
+                  No options needed. Your PDF is rebuilt from scratch with Ghostscript (qpdf is used
+                  as a fallback), which repairs broken cross-reference tables and damaged objects.
+                </p>
               </div>
             </ToolCard>
             <div className="flex justify-end gap-3">
@@ -197,10 +209,10 @@ export default function RepairPdfPage() {
                 <CheckCircle2 className="w-10 h-10 text-green-600" />
               </div>
               <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">PDF Repaired Successfully!</h2>
-              <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">Your file has been processed and is ready for download.</p>
+              <p className="text-gray-500 text-sm sm:text-base mb-8 max-w-md mx-auto leading-relaxed">Your PDF was rebuilt{repairMethod ? ` with ${repairMethod === 'qpdf' ? 'qpdf' : 'Ghostscript'}` : ''} and is ready for download.</p>
               <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">
                 <ToolPrimaryButton onClick={handleDownload} disabled={countdown > 0} className="flex-1">
-                  {countdown > 0 ? (<><Spinner size={24} color="#ffffff" className="shrink-0" /><span>Please wait {countdown}s...</span></>) : (<><Download className="w-5 h-5 shrink-0" /><span>Download</span></>)}
+                  {countdown > 0 ? (<><Spinner size={24} color="#ffffff" className="shrink-0" /><span>Please wait {countdown}s...</span></>) : (<><Download className="w-5 h-5 shrink-0" /><span>Download PDF</span></>)}
                 </ToolPrimaryButton>
                 <ToolSecondaryButton onClick={resetAll} className="flex-1">
                   <Upload className="w-5 h-5 shrink-0" />

@@ -1,43 +1,113 @@
 import { NextRequest } from 'next/server';
-import { spawn } from 'child_process';
-import { writeFileSync, unlinkSync, readFileSync } from 'fs';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { writeFileSync, readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
+import { makeTempDir } from '@/lib/cli';
+import {
+  errorResponse,
+  findQpdf,
+  getPdfFromPayload,
+  inspectEncryption,
+  looksLikePdf,
+  pdfResponse,
+  readToolRequest,
+  runQpdf,
+} from '@/lib/securityTools';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 60;
 
+function asBoolean(value: unknown, fallback: boolean): boolean {
+  if (typeof value === 'boolean') return value;
+  if (typeof value === 'string') {
+    if (/^(true|1|yes|on|y)$/i.test(value)) return true;
+    if (/^(false|0|no|off|n)$/i.test(value)) return false;
+  }
+  return fallback;
+}
+
+/**
+ * Protect PDF — AES-256 password protection through `qpdf --encrypt`.
+ *
+ * Body: { file, password, confirmPassword?, ownerPassword?, allowPrinting?, allowCopying? }
+ */
 export async function POST(request: NextRequest) {
-  try {
-    const body = await request.json();
-    const { file, password } = body;
+  let cleanup: (() => void) | null = null;
 
-    if (!file || !password) {
-      return Response.json({ error: 'File and password are required' }, { status: 400 });
+  try {
+    if (!findQpdf()) {
+      return errorResponse('qpdf is not available on the server', 503);
     }
 
-    const cleanBase64 = file.split(',')[1] || file;
-    const inputBuffer = Buffer.from(cleanBase64, 'base64');
+    const payload = await readToolRequest(request);
+    const bytes = getPdfFromPayload(payload, 'file');
+    const password = String(payload.fields.password ?? '');
+    const confirmValue = payload.fields.confirmPassword ?? payload.fields.passwordConfirm;
+    const confirm = confirmValue === undefined ? null : String(confirmValue);
+    const ownerPassword = String(payload.fields.ownerPassword ?? '') || password;
 
-    const inputPath = join(tmpdir(), `input-${Date.now()}.pdf`);
-    const outputPath = join(tmpdir(), `output-${Date.now()}.pdf`);
+    const allowPrinting = asBoolean(payload.fields.allowPrinting, true);
+    const allowCopying = asBoolean(payload.fields.allowCopying, false);
 
-    writeFileSync(inputPath, inputBuffer);
+    if (!bytes) return errorResponse('A PDF file is required');
+    if (!looksLikePdf(bytes)) return errorResponse('The uploaded file is not a valid PDF');
+    if (!password) return errorResponse('A password is required');
+    if (password.length < 4) {
+      return errorResponse('Please use a password with at least 4 characters');
+    }
+    if (confirm !== null && confirm !== password) {
+      return errorResponse('The passwords do not match');
+    }
 
-    await new Promise<void>((resolve, reject) => {
-      const qpdf = spawn('qpdf', ['--encrypt', password, password, '256', '--', inputPath, outputPath]);
-      qpdf.on('close', (code) => (code === 0 ? resolve() : reject(new Error(`qpdf exited with code ${code}`))));
-      qpdf.on('error', reject);
+    const temp = makeTempDir('pdftools-protect-');
+    cleanup = temp.cleanup;
+
+    const inputPath = join(temp.dir, 'input.pdf');
+    const outputPath = join(temp.dir, 'protected.pdf');
+    writeFileSync(inputPath, Buffer.from(bytes));
+
+    const info = await inspectEncryption(inputPath);
+    if (info.requiresPassword) {
+      return errorResponse(
+        'This PDF is already password protected. Unlock it first, then protect it again.',
+        400,
+      );
+    }
+
+    // qpdf --encrypt <user-password> <owner-password> 256 [restrictions] -- in out
+    const args = [
+      '--encrypt',
+      password,
+      ownerPassword,
+      '256',
+      `--print=${allowPrinting ? 'full' : 'none'}`,
+      `--extract=${allowCopying ? 'y' : 'n'}`,
+      `--modify=${allowCopying ? 'all' : 'none'}`,
+      '--accessibility=y',
+      '--',
+      inputPath,
+      outputPath,
+    ];
+
+    const result = await runQpdf(args);
+    if (!result.ok || !existsSync(outputPath)) {
+      return errorResponse(
+        result.stderr.trim().split('\n')[0] || 'Failed to protect this PDF',
+        422,
+      );
+    }
+
+    const outBytes = new Uint8Array(readFileSync(outputPath));
+
+    return pdfResponse(outBytes, 'protected.pdf', payload.wantsBinary, {
+      encryption: 'AES-256',
+      allowPrinting,
+      allowCopying,
     });
-
-    const outBuffer = readFileSync(outputPath);
-    const dataUrl = `data:application/pdf;base64,${outBuffer.toString('base64')}`;
-
-    unlinkSync(inputPath);
-    unlinkSync(outputPath);
-
-    return Response.json({ dataUrl, filename: 'protected.pdf' });
   } catch (error) {
     console.error('Protect error:', error);
-    return Response.json({ error: 'Failed to protect PDF' }, { status: 500 });
+    return errorResponse('Failed to protect PDF', 500);
+  } finally {
+    cleanup?.();
   }
 }

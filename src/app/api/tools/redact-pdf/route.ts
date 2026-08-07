@@ -1,211 +1,104 @@
 import { NextRequest } from 'next/server';
-import { PDFDocument, PDFArray, PDFDict, PDFName, PDFNumber, PDFPage, rgb } from 'pdf-lib';
-import { base64ToBytes, bytesToBase64 } from '@/lib/pdfUtils';
+
+import { applyRedactions, type RedactRect } from '@/lib/pdfRedact';
+import {
+  errorResponse,
+  getPdfFromPayload,
+  looksLikePdf,
+  pdfResponse,
+  readToolRequest,
+} from '@/lib/securityTools';
 
 export const dynamic = 'force-dynamic';
+export const maxDuration = 120;
 
-type RawRegion = {
-  page?: unknown;
-  pageNumber?: unknown;
-  x?: unknown;
-  xPosition?: unknown;
-  y?: unknown;
-  yPosition?: unknown;
-  width?: unknown;
-  height?: unknown;
-};
+type RawRegion = Record<string, unknown>;
 
-type Region = {
-  pageIndex: number;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-};
-
-function toNumber(value: unknown, fallback: number): number {
+function toNumber(value: unknown, fallback = 0): number {
   const num = Number(value);
   return Number.isFinite(num) ? num : fallback;
 }
 
 /**
- * Normalises a region. The page sends 1-based `pageNumber` plus
- * `xPosition`/`yPosition`/`width`/`height`; the legacy shape used a 0-based
- * `page` plus `x`/`y`/`width`/`height`. Both are accepted.
+ * Accepts every shape the page has used over time:
+ *  - { pageIndex, x, y, width, height }            (current)
+ *  - { pageNumber, xPosition, yPosition, w, h }    (legacy single region)
+ *  - { page, x, y, width, height }                 (legacy 0-based)
  */
-function normalizeRegion(raw: RawRegion): Region {
-  const hasPageNumber = raw.pageNumber !== undefined && raw.pageNumber !== null;
-  const pageIndex = hasPageNumber
-    ? Math.round(toNumber(raw.pageNumber, 1)) - 1
-    : Math.round(toNumber(raw.page, 0));
+function normalizeRegion(raw: RawRegion): RedactRect {
+  const pageIndex =
+    raw.pageIndex !== undefined && raw.pageIndex !== null
+      ? Math.round(toNumber(raw.pageIndex, 0))
+      : raw.pageNumber !== undefined && raw.pageNumber !== null
+        ? Math.round(toNumber(raw.pageNumber, 1)) - 1
+        : Math.round(toNumber(raw.page, 0));
 
   return {
     pageIndex,
-    x: toNumber(raw.xPosition ?? raw.x, 0),
-    y: toNumber(raw.yPosition ?? raw.y, 0),
-    width: toNumber(raw.width, 0),
-    height: toNumber(raw.height, 0),
+    x: toNumber(raw.x ?? raw.xPosition),
+    y: toNumber(raw.y ?? raw.yPosition),
+    width: toNumber(raw.width),
+    height: toNumber(raw.height),
   };
 }
 
 /**
- * Drops annotations (links, comments, form widgets, ...) that overlap the
- * redacted area. Their content would otherwise still be readable/selectable
- * underneath the black box. Best effort: never throws.
+ * Redact PDF — genuinely removes the content under each box.
+ *
+ * The page content streams are rewritten so every glyph inside a rectangle is
+ * deleted (see `src/lib/pdfRedact.ts`); the black rectangle painted on top is
+ * only the visual marker.
  */
-function stripOverlappingAnnotations(
-  pdfDoc: PDFDocument,
-  page: PDFPage,
-  box: { x: number; y: number; width: number; height: number }
-): number {
-  try {
-    const annots = page.node.Annots();
-    if (!annots) return 0;
-
-    const kept = PDFArray.withContext(pdfDoc.context);
-    let removed = 0;
-
-    for (let i = 0; i < annots.size(); i++) {
-      const entry = annots.get(i);
-      let overlaps = false;
-
-      try {
-        const dict = pdfDoc.context.lookup(entry, PDFDict);
-        const rect = dict?.lookup(PDFName.of('Rect'), PDFArray);
-
-        if (rect && rect.size() === 4) {
-          const [ax0, ay0, ax1, ay1] = [0, 1, 2, 3].map((idx) =>
-            rect.lookup(idx, PDFNumber).asNumber()
-          );
-          const aLeft = Math.min(ax0, ax1);
-          const aRight = Math.max(ax0, ax1);
-          const aBottom = Math.min(ay0, ay1);
-          const aTop = Math.max(ay0, ay1);
-
-          overlaps =
-            aLeft < box.x + box.width &&
-            aRight > box.x &&
-            aBottom < box.y + box.height &&
-            aTop > box.y;
-        }
-      } catch {
-        overlaps = false;
-      }
-
-      if (overlaps) {
-        removed += 1;
-      } else {
-        kept.push(entry);
-      }
-    }
-
-    if (removed > 0) {
-      page.node.set(PDFName.of('Annots'), kept);
-    }
-
-    return removed;
-  } catch {
-    return 0;
-  }
-}
-
 export async function POST(request: NextRequest) {
   try {
-    const body = await request.json();
-    const { file, regions } = body ?? {};
+    const payload = await readToolRequest(request);
+    const fields = payload.fields;
 
-    if (!file) {
-      return Response.json({ error: 'PDF file is required' }, { status: 400 });
-    }
+    const bytes = getPdfFromPayload(payload, 'file');
+    if (!bytes) return errorResponse('A PDF file is required');
+    if (!looksLikePdf(bytes)) return errorResponse('The uploaded file is not a valid PDF');
 
-    // The page posts a single region at the top level; an array of regions is also supported.
-    const rawRegions: RawRegion[] = Array.isArray(regions) && regions.length > 0
-      ? (regions as RawRegion[])
-      : [body as RawRegion];
-
-    const parsedRegions = rawRegions.map(normalizeRegion);
-    const validRegions = parsedRegions.filter((r) => r.width > 0 && r.height > 0);
-
-    if (validRegions.length === 0) {
-      return Response.json(
-        { error: 'A redaction region with a positive width and height is required' },
-        { status: 400 }
-      );
-    }
-
-    const bytes = base64ToBytes(file);
-    const pdfDoc = await PDFDocument.load(bytes);
-    const pageCount = pdfDoc.getPageCount();
-
-    if (pageCount === 0) {
-      return Response.json({ error: 'The PDF has no pages to redact' }, { status: 400 });
-    }
-
-    const redactColor = rgb(0, 0, 0);
-    let applied = 0;
-    let annotationsRemoved = 0;
-
-    for (const region of validRegions) {
-      if (region.pageIndex < 0 || region.pageIndex >= pageCount) {
-        return Response.json(
-          { error: `Page ${region.pageIndex + 1} does not exist. The document has ${pageCount} page(s).` },
-          { status: 400 }
-        );
+    let rawRegions: RawRegion[] = [];
+    const candidate = fields.rects ?? fields.regions ?? fields.boxes;
+    if (typeof candidate === 'string') {
+      try {
+        const parsed = JSON.parse(candidate);
+        if (Array.isArray(parsed)) rawRegions = parsed as RawRegion[];
+      } catch {
+        rawRegions = [];
       }
-
-      const page = pdfDoc.getPage(region.pageIndex);
-      const { width: pageWidth, height: pageHeight } = page.getSize();
-
-      // Clamp the box to the page so the redaction is always visible on the page.
-      const x = Math.max(0, Math.min(region.x, pageWidth));
-      const y = Math.max(0, Math.min(region.y, pageHeight));
-      const boxWidth = Math.min(region.width, pageWidth - x);
-      const boxHeight = Math.min(region.height, pageHeight - y);
-
-      if (boxWidth <= 0 || boxHeight <= 0) continue;
-
-      // Fully opaque black box: it covers (hides) whatever is painted underneath.
-      page.drawRectangle({
-        x,
-        y,
-        width: boxWidth,
-        height: boxHeight,
-        color: redactColor,
-        borderColor: redactColor,
-        borderWidth: 0,
-        opacity: 1,
-      });
-
-      // Anything interactive sitting under the box (links, form fields, notes)
-      // would still expose the hidden content, so remove it.
-      annotationsRemoved += stripOverlappingAnnotations(pdfDoc, page, {
-        x,
-        y,
-        width: boxWidth,
-        height: boxHeight,
-      });
-
-      applied += 1;
+    } else if (Array.isArray(candidate)) {
+      rawRegions = candidate as RawRegion[];
     }
 
-    if (applied === 0) {
-      return Response.json(
-        { error: 'The redaction region falls outside the page bounds' },
-        { status: 400 }
-      );
+    if (rawRegions.length === 0) {
+      // Legacy: a single region posted at the top level.
+      if (fields.width !== undefined && fields.height !== undefined) {
+        rawRegions = [fields as RawRegion];
+      }
     }
 
-    const outBytes = await pdfDoc.save({ useObjectStreams: true });
-    const dataUrl = bytesToBase64(outBytes);
+    const regions = rawRegions.map(normalizeRegion).filter((r) => r.width > 0 && r.height > 0);
+    if (regions.length === 0) {
+      return errorResponse('Draw at least one redaction box before redacting');
+    }
 
-    return Response.json({
-      dataUrl,
-      filename: 'redacted.pdf',
-      regionsApplied: applied,
-      annotationsRemoved,
+    const { bytes: outBytes, stats } = await applyRedactions(bytes, regions);
+
+    if (stats.regionsApplied === 0) {
+      return errorResponse('The redaction boxes fall outside the pages of this document');
+    }
+
+    return pdfResponse(outBytes, 'redacted.pdf', payload.wantsBinary, {
+      regionsApplied: stats.regionsApplied,
+      pagesProcessed: stats.pagesProcessed,
+      glyphsRemoved: stats.glyphsRemoved,
+      textOpsModified: stats.textOpsModified,
+      imagesRemoved: stats.imagesRemoved,
+      annotationsRemoved: stats.annotationsRemoved,
     });
   } catch (error) {
     console.error('Redact error:', error);
-    return Response.json({ error: 'Failed to redact PDF' }, { status: 500 });
+    return errorResponse('Failed to redact PDF', 500);
   }
 }

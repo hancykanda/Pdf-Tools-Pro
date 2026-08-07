@@ -59,6 +59,8 @@ export const toolCategories: ToolCategory[] = [
       'merge',
       'split',
       'organize-pdf',
+      'remove-pages',
+      'extract-pages',
       'compare-pdf',
     ],
   },

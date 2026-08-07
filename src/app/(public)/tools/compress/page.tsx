@@ -16,9 +16,38 @@ import {
 import { Spinner } from '@/components/ui/Spinner';
 import { ProcessingModal } from '@/components/layout';
 
+type CompressionLevel = 'low' | 'medium' | 'high';
+
+const LEVELS: {
+  value: CompressionLevel;
+  title: string;
+  hint: string;
+  preset: string;
+}[] = [
+  {
+    value: 'low',
+    title: 'Low quality',
+    hint: 'Smallest file — best for email and web sharing',
+    preset: '/screen',
+  },
+  {
+    value: 'medium',
+    title: 'Medium quality',
+    hint: 'Balanced size and quality — recommended',
+    preset: '/ebook',
+  },
+  {
+    value: 'high',
+    title: 'High quality',
+    hint: 'Largest file — keeps the most detail for printing',
+    preset: '/printer',
+  },
+];
+
 export default function CompressPage() {
   const [originalSize, setOriginalSize] = useState(0);
   const [compressedSize, setCompressedSize] = useState(0);
+  const [level, setLevel] = useState<CompressionLevel>('medium');
   const {
     step,
     setStep,
@@ -32,11 +61,17 @@ export default function CompressPage() {
     setIsProcessing,
     error,
     setError,
-        setSuccess,
+    setSuccess,
     goToOptions,
     goToDownload,
     resetAll,
-  } = useToolState<Record<string, unknown>>();
+  } = useToolState<Record<string, unknown>>({
+    onReset: () => {
+      setOriginalSize(0);
+      setCompressedSize(0);
+      setLevel('medium');
+    },
+  });
 
   const handleFile = (selected: FileList | null) => {
     const selectedFile = selected?.[0] || null;
@@ -66,25 +101,27 @@ export default function CompressPage() {
     setError(null);
 
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-      });
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('level', level);
 
       const res = await fetch('/api/tools/compress', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: base64 }),
+        body: formData,
       });
 
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Compression failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Compression failed');
+      }
 
-      const estimatedSize = Math.floor((data.dataUrl.length - `data:application/pdf;base64,`.length) * 0.75);
-      setCompressedSize(estimatedSize);
-      setResult(data.dataUrl);
+      const blob = await res.blob();
+      const before = Number(res.headers.get('X-Original-Size')) || file.size;
+      const after = Number(res.headers.get('X-Compressed-Size')) || blob.size;
+
+      setOriginalSize(before);
+      setCompressedSize(after);
+      setResult(URL.createObjectURL(blob));
       setSuccess(true);
       startCountdown();
       goToDownload();
@@ -103,7 +140,9 @@ export default function CompressPage() {
     return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
   };
 
-  const savings = originalSize > 0 && compressedSize > 0 ? ((1 - compressedSize / originalSize) * 100).toFixed(1) : '0.0';
+  const savedPercent =
+    originalSize > 0 && compressedSize > 0 ? (1 - compressedSize / originalSize) * 100 : 0;
+  const savings = savedPercent.toFixed(1);
 
   const startCountdown = () => {
     let remaining = 10;
@@ -122,7 +161,7 @@ export default function CompressPage() {
     if (!result || countdown > 0) return;
     const link = document.createElement('a');
     link.href = result;
-    link.download = 'compressed.pdf';
+    link.download = `${(file?.name || 'document').replace(/\.pdf$/i, '')}-compressed.pdf`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -132,7 +171,11 @@ export default function CompressPage() {
     <ToolPageShell title="Compress PDF" description="Reduce PDF file size while preserving quality." icon={ShieldCheck}>
       <div className="max-w-3xl mx-auto">
         <StepIndicator currentStep={step} />
-        <ProcessingModal open={isProcessing} />
+        <ProcessingModal
+          open={isProcessing}
+          message="Compressing your PDF..."
+          submessage="Ghostscript is re-encoding the document. Keep this tab open."
+        />
         <div key={step} className="animate-slide-up">
 
         {/* Step 1: Upload */}
@@ -209,10 +252,10 @@ export default function CompressPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="font-display font-bold text-xl text-brand-dark mb-1">
-                    Ready to Compress
+                    Compression Level
                   </h2>
                   <p className="text-sm text-gray-500">
-                    Review your file and start compression
+                    Choose how much quality to trade for a smaller file
                   </p>
                 </div>
                 <button
@@ -238,13 +281,60 @@ export default function CompressPage() {
                   </div>
                 </div>
 
+                <fieldset className="space-y-3">
+                  <legend className="block text-sm font-semibold text-gray-700 mb-2">
+                    Compression
+                  </legend>
+                  {LEVELS.map((option) => {
+                    const selected = level === option.value;
+                    return (
+                      <label
+                        key={option.value}
+                        className={`flex items-start gap-3 p-4 rounded-2xl border cursor-pointer transition-all ${
+                          selected
+                            ? 'border-brand-red bg-red-50/60 ring-2 ring-brand-red/15'
+                            : 'border-gray-200 bg-white hover:bg-gray-50'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          name="compression-level"
+                          value={option.value}
+                          checked={selected}
+                          onChange={() => setLevel(option.value)}
+                          className="mt-1 h-4 w-4 accent-[var(--color-brand-red)] cursor-pointer"
+                        />
+                        <span className="flex-1 min-w-0">
+                          <span className="flex items-center gap-2">
+                            <span className="text-sm font-semibold text-brand-dark">{option.title}</span>
+                            <span className="text-[10px] uppercase font-bold tracking-wider text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">
+                              {option.preset}
+                            </span>
+                          </span>
+                          <span className="block text-xs text-gray-500 mt-0.5">{option.hint}</span>
+                        </span>
+                      </label>
+                    );
+                  })}
+                </fieldset>
+
                 <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl">
                   <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
                   <p className="text-xs text-blue-700 leading-relaxed">
-                    Compressing your PDF will reduce file size while preserving document quality. The process typically takes a few seconds.
+                    Your PDF is re-encoded with Ghostscript, which downsamples images and subsets
+                    fonts. You will see the before and after size once it finishes.
                   </p>
                 </div>
               </div>
+
+              {error && (
+                <div className="mt-4">
+                  <ToolAlert type="error">
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    <span>{error}</span>
+                  </ToolAlert>
+                </div>
+              )}
             </ToolCard>
 
             <div className="flex justify-end gap-3">
@@ -278,13 +368,28 @@ export default function CompressPage() {
               <h2 className="font-display font-bold text-2xl sm:text-3xl text-brand-dark mb-3">
                 PDF Compressed Successfully!
               </h2>
-              <p className="text-gray-500 text-sm sm:text-base mb-2 max-w-md mx-auto leading-relaxed">
+              <p className="text-gray-500 text-sm sm:text-base mb-6 max-w-md mx-auto leading-relaxed">
                 Your PDF has been compressed and is ready for download.
               </p>
+
               {compressedSize > 0 && (
-                <p className="text-sm font-semibold text-green-600 mb-8">
-                  Saved {savings}% • {formatSize(originalSize)} → {formatSize(compressedSize)}
-                </p>
+                <div className="max-w-md mx-auto mb-8">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="p-4 bg-gray-50 border border-gray-100 rounded-2xl">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-gray-400 mb-1">Before</p>
+                      <p className="text-lg font-bold text-brand-dark">{formatSize(originalSize)}</p>
+                    </div>
+                    <div className="p-4 bg-green-50 border border-green-100 rounded-2xl">
+                      <p className="text-[10px] uppercase font-bold tracking-wider text-green-600/70 mb-1">After</p>
+                      <p className="text-lg font-bold text-green-700">{formatSize(compressedSize)}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold text-green-600 mt-3">
+                    {savedPercent > 0.05
+                      ? `Saved ${savings}% (${formatSize(Math.max(originalSize - compressedSize, 0))})`
+                      : 'Already optimized — the original was kept because it was smaller.'}
+                  </p>
+                </div>
               )}
 
               <div className="flex flex-col sm:flex-row gap-3 w-full max-w-md mx-auto">

@@ -3,8 +3,15 @@ FROM node:20-alpine AS base
 # Install dependencies only
 FROM base AS deps
 # qpdf CLI is required by protect-pdf / unlock-pdf routes.
-# LibreOffice (writer + impress) powers the PDF -> Word (.docx) conversion.
-RUN apk add --no-cache libc6-compat qpdf libreoffice-writer libreoffice-impress fontconfig ttf-dejavu ttf-liberation
+# LibreOffice (writer + calc + impress) powers the Office <-> PDF conversions.
+# Chromium is used by Puppeteer for html-to-pdf (the bundled download is
+# glibc-only, so on Alpine we point Puppeteer at the system build instead).
+RUN apk add --no-cache libc6-compat qpdf \
+    libreoffice-writer libreoffice-calc libreoffice-impress \
+    chromium nss freetype harfbuzz \
+    fontconfig ttf-dejavu ttf-liberation
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -25,8 +32,14 @@ FROM base AS runner
 WORKDIR /app
 
 # qpdf CLI is required at runtime by the protect-pdf / unlock-pdf API routes.
-# LibreOffice powers the PDF -> Word (.docx) conversion at runtime.
-RUN apk add --no-cache qpdf libreoffice-writer libreoffice-impress fontconfig ttf-dejavu ttf-liberation
+# LibreOffice powers the Office <-> PDF conversions at runtime.
+# Chromium backs Puppeteer for html-to-pdf.
+RUN apk add --no-cache qpdf \
+    libreoffice-writer libreoffice-calc libreoffice-impress \
+    chromium nss freetype harfbuzz \
+    fontconfig ttf-dejavu ttf-liberation
+ENV PUPPETEER_SKIP_DOWNLOAD=true
+ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 
 ENV NODE_ENV=production
 

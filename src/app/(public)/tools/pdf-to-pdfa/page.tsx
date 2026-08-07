@@ -16,7 +16,17 @@ import {
 import { Spinner } from '@/components/ui/Spinner';
 import { ProcessingModal } from '@/components/layout';
 
+const CONFORMANCE_OPTIONS = [
+  { value: 'PDF/A-1b', label: 'PDF/A-1b', hint: 'Strictest, widest archive support' },
+  { value: 'PDF/A-2b', label: 'PDF/A-2b', hint: 'Recommended — JPEG2000 & transparency' },
+  { value: 'PDF/A-3b', label: 'PDF/A-3b', hint: 'Allows embedded attachments' },
+] as const;
+
+type Conformance = (typeof CONFORMANCE_OPTIONS)[number]['value'];
+
 export default function PdfToPdfaPage() {
+  const [conformance, setConformance] = useState<Conformance>('PDF/A-2b');
+  const [downloadName, setDownloadName] = useState('converted.pdf');
   const {
     step,
     setStep,
@@ -61,20 +71,23 @@ export default function PdfToPdfaPage() {
     setIsProcessing(true);
     setError(null);
     try {
-      const base64 = await new Promise<string>((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-      });
-      const res = await fetch('/api/tools/pdf-to-pdfa', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ file: base64 }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Conversion failed');
-      setResult(data.dataUrl);
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('conformance', conformance);
+
+      const res = await fetch('/api/tools/pdf-to-pdfa', { method: 'POST', body: formData });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Conversion failed');
+      }
+
+      const blob = await res.blob();
+      if (blob.size === 0) throw new Error('Conversion produced an empty file');
+
+      const base = file.name.replace(/\.[^/.]+$/, '') || 'document';
+      const suffix = conformance.replace('PDF/', '').replace('/', '').toLowerCase();
+      setDownloadName(`${base}-pdf${suffix}.pdf`);
+      setResult(URL.createObjectURL(blob));
       setSuccess(true);
       startCountdown();
       goToDownload();
@@ -100,7 +113,7 @@ export default function PdfToPdfaPage() {
     if (!result || countdown > 0) return;
     const link = document.createElement('a');
     link.href = result;
-    link.download = 'converted.pdf';
+    link.download = downloadName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -165,7 +178,7 @@ export default function PdfToPdfaPage() {
               <div className="flex items-center justify-between mb-6">
                 <div>
                   <h2 className="font-display font-bold text-xl text-brand-dark mb-1">Conversion Settings</h2>
-                  <p className="text-sm text-gray-500">Review your file and start processing</p>
+                  <p className="text-sm text-gray-500">Choose the PDF/A conformance level</p>
                 </div>
                 <button onClick={() => setStep('upload')} className="text-xs font-semibold text-gray-500 hover:text-brand-red transition-colors cursor-pointer">← Back to Upload</button>
               </div>
@@ -176,9 +189,27 @@ export default function PdfToPdfaPage() {
                   <p className="text-xs text-gray-500 mt-0.5">{formatSize(file?.size || 0)}</p>
                 </div>
               </div>
+              <div className="mt-6">
+                <label htmlFor="conformance" className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Conformance level
+                </label>
+                <select
+                  id="conformance"
+                  value={conformance}
+                  onChange={(e) => setConformance(e.target.value as Conformance)}
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm font-semibold text-brand-dark bg-white focus:outline-none focus:border-brand-red transition-colors cursor-pointer"
+                >
+                  {CONFORMANCE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label} — {option.hint}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
               <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl mt-4">
                 <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-blue-700 leading-relaxed">Ready to process your file. Click the button below to start.</p>
+                <p className="text-xs text-blue-700 leading-relaxed">Ghostscript rewrites the file to the selected PDF/A profile, embedding all fonts and an sRGB output intent for long-term archiving.</p>
               </div>
             </ToolCard>
             <div className="flex justify-end gap-3">

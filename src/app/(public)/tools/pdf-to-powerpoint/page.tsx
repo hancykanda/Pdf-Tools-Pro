@@ -1,6 +1,5 @@
 'use client';
 
-import { useState } from 'react';
 import { Presentation, Upload, Download, CheckCircle2, AlertCircle, Info } from 'lucide-react';
 import { useToolState } from '@/hooks/useToolState';
 import {
@@ -67,9 +66,12 @@ export default function PdfToPowerpointPage() {
         method: 'POST',
         body: formData,
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error || 'Conversion failed');
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.error || 'Conversion failed');
+      }
       const blob = await res.blob();
+      if (blob.size === 0) throw new Error('Conversion produced an empty file');
       const url = URL.createObjectURL(blob);
       setResult(url);
       setSuccess(true);
@@ -97,7 +99,7 @@ export default function PdfToPowerpointPage() {
     if (!result || countdown > 0) return;
     const link = document.createElement('a');
     link.href = result;
-    link.download = 'converted.pptx';
+    link.download = `${(file?.name || 'presentation').replace(/\.[^/.]+$/, '')}.pptx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -175,7 +177,7 @@ export default function PdfToPowerpointPage() {
               </div>
               <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl mt-4">
                 <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-blue-700 leading-relaxed">Ready to process your file. Click the button below to start.</p>
+                <p className="text-xs text-blue-700 leading-relaxed">Each PDF page becomes one slide. LibreOffice imports the PDF into Impress and exports a real .pptx file — no extra options needed.</p>
               </div>
             </ToolCard>
             <div className="flex justify-end gap-3">

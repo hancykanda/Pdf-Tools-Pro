@@ -17,6 +17,9 @@ import { Spinner } from '@/components/ui/Spinner';
 import { ProcessingModal } from '@/components/layout';
 
 export default function PdfToExcelPage() {
+  const [pageRange, setPageRange] = useState('');
+  const [tablesOnly, setTablesOnly] = useState(true);
+  const [xlsxName, setXlsxName] = useState('converted.xlsx');
   const {
     step,
     setStep,
@@ -63,6 +66,8 @@ export default function PdfToExcelPage() {
     try {
       const formData = new FormData();
       formData.append('file', file);
+      if (pageRange.trim()) formData.append('pages', pageRange.trim());
+      formData.append('tablesOnly', String(tablesOnly));
       const res = await fetch('/api/tools/pdf-to-excel', {
         method: 'POST',
         body: formData,
@@ -72,7 +77,9 @@ export default function PdfToExcelPage() {
         throw new Error(data.error || 'Conversion failed');
       }
       const blob = await res.blob();
+      if (blob.size === 0) throw new Error('Conversion produced an empty file');
       const url = URL.createObjectURL(blob);
+      setXlsxName(`${file.name.replace(/\.[^/.]+$/, '') || 'converted'}.xlsx`);
       setResult(url);
       setSuccess(true);
       startCountdown();
@@ -99,7 +106,7 @@ export default function PdfToExcelPage() {
     if (!result || countdown > 0) return;
     const link = document.createElement('a');
     link.href = result;
-    link.download = 'converted.xlsx';
+    link.download = xlsxName;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -175,9 +182,42 @@ export default function PdfToExcelPage() {
                   <p className="text-xs text-gray-500 mt-0.5">{formatSize(file?.size || 0)}</p>
                 </div>
               </div>
+
+              <div className="mt-6">
+                <label htmlFor="page-range" className="block text-xs font-bold uppercase tracking-wider text-gray-500 mb-2">
+                  Page range
+                </label>
+                <input
+                  id="page-range"
+                  type="text"
+                  value={pageRange}
+                  onChange={(e) => setPageRange(e.target.value)}
+                  placeholder="e.g. 1-3, 5, 8   (leave empty for all pages)"
+                  className="w-full px-4 py-3 rounded-2xl border border-gray-200 text-sm text-brand-dark placeholder:text-gray-400 focus:outline-none focus:border-brand-red transition-colors"
+                />
+                <p className="text-xs text-gray-400 mt-2">
+                  Convert only the pages that actually contain tables — each page becomes its own worksheet.
+                </p>
+              </div>
+
+              <label className="flex items-start gap-3 mt-4 p-3 rounded-2xl border border-gray-100 cursor-pointer hover:bg-gray-50 transition-colors">
+                <input
+                  type="checkbox"
+                  checked={tablesOnly}
+                  onChange={(e) => setTablesOnly(e.target.checked)}
+                  className="mt-0.5 w-4 h-4 accent-[var(--brand-red,#e5322d)] cursor-pointer"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-brand-dark">Keep table rows only</span>
+                  <span className="block text-xs text-gray-500 mt-0.5">
+                    Skips headings and paragraphs, keeping rows with two or more columns. Uncheck to export every line of text.
+                  </span>
+                </span>
+              </label>
+
               <div className="flex items-start gap-2.5 p-3 bg-blue-50 border border-blue-100 rounded-xl mt-4">
                 <Info className="w-4 h-4 text-blue-600 mt-0.5 shrink-0" />
-                <p className="text-xs text-blue-700 leading-relaxed">Ready to process your file. Click the button below to start.</p>
+                <p className="text-xs text-blue-700 leading-relaxed">Tables are detected from the text positions in the PDF and written to a real .xlsx workbook. Scanned PDFs need OCR first.</p>
               </div>
             </ToolCard>
             <div className="flex justify-end gap-3">
