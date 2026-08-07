@@ -31,7 +31,7 @@ app = FastAPI(title="pdf-tools remove-watermark sidecar")
 # Minimum template-match confidence required to treat a hit as the watermark.
 MATCH_THRESHOLD = 0.55
 # Inpainting radius (pixels).
-INPAINT_RADIUS = 4
+INPAINT_RADIUS = 5
 
 
 def _is_pdf(data: bytes) -> bool:
@@ -61,7 +61,24 @@ def _inpaint_region(bgr: np.ndarray, x: int, y: int, w: int, h: int) -> np.ndarr
         return bgr
     mask = np.zeros((hh, ww), dtype=np.uint8)
     mask[y0:y1, x0:x1] = 255
-    return cv2.inpaint(bgr, mask, INPAINT_RADIUS, cv2.INPAINT_TELEA)
+    # Two-pass: TELEA seeds the fill, NS refines — removes solid/colored logos
+    # more cleanly than a single pass.
+    step = cv2.inpaint(bgr, mask, INPAINT_RADIUS, cv2.INPAINT_TELEA)
+    inpainted = cv2.inpaint(step, mask, INPAINT_RADIUS, cv2.INPAINT_NS)
+
+    # Background blend: diffusion inpainting still leaves a faint tint for fully
+    # opaque marks on a uniform background. Blend the region toward the mean
+    # color of the surrounding ring so the mark is fully neutralized (the
+    # common watermark-on-white-page case).
+    kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (17, 17))
+    dilated = cv2.dilate(mask, kernel)
+    ring = (dilated & ~mask).astype(bool)
+    if ring.sum() > 50:
+        bg = bgr[ring].mean(axis=0)
+        region = inpainted[y0:y1, x0:x1].astype(np.float32)
+        region = region * 0.05 + bg * 0.95
+        inpainted[y0:y1, x0:x1] = region.astype(np.uint8)
+    return inpainted
 
 
 def _match_template(bgr: np.ndarray, template_bgr: np.ndarray) -> Optional[Tuple[int, int, int, int]]:
