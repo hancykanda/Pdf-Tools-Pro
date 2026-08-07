@@ -23,6 +23,7 @@ const tools = [
   { name: 'Watermark', href: '/tools/watermark' },
   { name: 'Crop PDF', href: '/tools/crop-pdf' },
   { name: 'Edit PDF', href: '/tools/edit-pdf' },
+  { name: 'Remove Watermark', href: '/tools/remove-watermark' },
   { name: 'Unlock PDF', href: '/tools/unlock-pdf' },
   { name: 'Protect PDF', href: '/tools/protect-pdf' },
   { name: 'Sign PDF', href: '/tools/sign-pdf' },

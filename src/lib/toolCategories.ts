@@ -40,6 +40,7 @@ export const toolCategories: ToolCategory[] = [
       'rotate-pdf',
       'redact-pdf',
       'sign-pdf',
+      'remove-watermark',
     ],
   },
   {

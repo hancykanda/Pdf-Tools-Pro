@@ -42,6 +42,7 @@ const toolDisplayNames: Record<string, string> = {
   'summarize-pdf': 'AI Summarizer',
   'translate-pdf': 'Translate PDF',
   'ocr-pdf': 'OCR PDF',
+  'remove-watermark': 'Remove Watermark',
 };
 
 const toolDescriptions: Record<string, string> = {
@@ -77,6 +78,7 @@ const toolDescriptions: Record<string, string> = {
   'summarize-pdf': 'Generate AI-powered summaries',
   'translate-pdf': 'Translate PDF content to other languages',
   'ocr-pdf': 'Make scanned PDFs searchable',
+  'remove-watermark': 'Strip logos and watermarks from files',
 };
 
 export function RelatedTools({ currentTool, title = 'Recommended Tools' }: RelatedToolsProps) {

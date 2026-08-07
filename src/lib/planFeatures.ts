@@ -52,6 +52,7 @@ export const PREMIUM_TOOLS: FeatureItem[] = [
   { id: 'papers', label: 'Papers Bank' },
   { id: 'exam-generator', label: 'Exam Generator' },
   { id: 'lesson-plans', label: 'Lesson Plans' },
+  { id: 'remove-watermark', label: 'Remove Watermark' },
 ];
 
 export const ALL_FREE_TOOL_IDS: string[] = FREE_TOOLS.map((t) => t.id);

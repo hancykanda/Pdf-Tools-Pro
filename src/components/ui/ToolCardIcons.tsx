@@ -36,3 +36,4 @@ export const ScanToPdfIcon = icon('scan-to-pdf', 'Scan to PDF');
 export const SummarizePdfIcon = icon('ai-summarizer', 'AI Summarizer');
 export const TranslatePdfIcon = icon('translate-pdf', 'Translate PDF');
 export const PdfToMarkdownIcon = icon('pdf-to-markdown', 'PDF to Markdown');
+export const RemoveWatermarkIcon = icon('remove-watermark', 'Remove Watermark');

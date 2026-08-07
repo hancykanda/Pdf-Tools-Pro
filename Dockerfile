@@ -9,7 +9,8 @@ FROM base AS deps
 RUN apk add --no-cache libc6-compat qpdf \
     libreoffice-writer libreoffice-calc libreoffice-impress \
     chromium nss freetype harfbuzz \
-    fontconfig ttf-dejavu ttf-liberation
+    fontconfig ttf-dejavu ttf-liberation \
+    poppler-utils
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 WORKDIR /app
@@ -37,7 +38,8 @@ WORKDIR /app
 RUN apk add --no-cache qpdf \
     libreoffice-writer libreoffice-calc libreoffice-impress \
     chromium nss freetype harfbuzz \
-    fontconfig ttf-dejavu ttf-liberation
+    fontconfig ttf-dejavu ttf-liberation \
+    poppler-utils
 ENV PUPPETEER_SKIP_DOWNLOAD=true
 ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium-browser
 

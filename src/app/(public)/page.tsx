@@ -46,6 +46,7 @@ import {
   SummarizePdfIcon,
   TranslatePdfIcon,
   PdfToMarkdownIcon,
+  RemoveWatermarkIcon,
 } from '@/components/ui/ToolCardIcons';
 
 const tools = [
@@ -76,6 +77,7 @@ const tools = [
   { name: 'Watermark', href: '/tools/watermark', description: 'Add text or image watermark', icon: WatermarkIcon, category: 'edit' },
   { name: 'Crop PDF', href: '/tools/crop-pdf', description: 'Crop PDF margins', icon: CropPdfIcon, category: 'edit' },
   { name: 'Edit PDF', href: '/tools/edit-pdf', description: 'Add text, images, and shapes', icon: EditPdfIcon, category: 'edit' },
+  { name: 'Remove Watermark', href: '/tools/remove-watermark', description: 'Strip logos and watermarks from files', icon: RemoveWatermarkIcon, category: 'edit' },
   { name: 'Redact PDF', href: '/tools/redact-pdf', description: 'Permanently remove sensitive text', icon: RedactPdfIcon, category: 'edit' },
   { name: 'Sign PDF', href: '/tools/sign-pdf', description: 'Add digital signatures', icon: SignPdfIcon, category: 'edit' },
 
