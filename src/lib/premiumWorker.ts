@@ -4,6 +4,15 @@ import { downloadFile, uploadFile } from './minio';
 import { PDFDocument, rgb } from 'pdf-lib';
 import { extractPdfText } from './pdfText';
 import { generateWithGemini } from './gemini';
+import * as pdfjs from 'pdfjs-dist/legacy/build/pdf.mjs';
+
+// Server-side pdfjs worker (same setup as the working pdf-to-word route).
+pdfjs.GlobalWorkerOptions.workerSrc = new URL(
+  'pdfjs-dist/legacy/build/pdf.worker.mjs',
+  import.meta.url,
+).toString();
+
+type PageText = { width: number; height: number; text: string };
 
 async function streamToBuffer(stream: AsyncIterable<Buffer> | NodeJS.ReadableStream): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -61,17 +70,88 @@ async function buildTextPdf(title: string, body: string): Promise<Buffer> {
   return Buffer.from(await pdfDoc.save());
 }
 
-async function applyAiEdit(buffer: Buffer, prompt: string): Promise<Buffer> {
-  const sourceText = await extractPdfText(buffer);
-  let edited = sourceText;
-  try {
-    edited = await generateWithGemini(
-      `You are a document editor. Rewrite the document below according to this instruction: "${prompt}".\n\nReturn ONLY the full edited document text, preserving structure as plain text.\n\nORIGINAL:\n${sourceText}`
-    );
-  } catch {
-    edited = `(${prompt})\n\n${sourceText}`;
+async function extractPages(buffer: Buffer): Promise<PageText[]> {
+  const doc = await pdfjs.getDocument({ data: new Uint8Array(buffer) }).promise;
+  const pages: PageText[] = [];
+  for (let i = 1; i <= doc.numPages; i++) {
+    const page = await doc.getPage(i);
+    const viewport = page.getViewport({ scale: 1 });
+    const textContent = await page.getTextContent();
+    const items = textContent.items as Array<{ str?: string }>;
+    const text = items.map((it) => it.str ?? '').join(' ').replace(/\s+/g, ' ').trim();
+    pages.push({ width: viewport.width, height: viewport.height, text });
+    await page.cleanup();
   }
-  return buildTextPdf('AI Edited Document', edited);
+  return pages;
+}
+
+function splitIntoPages(marked: string): string[] {
+  const parts = marked.split(/^===PAGE\s+\d+===$/m).map((s) => s.trim()).filter(Boolean);
+  return parts.length > 0 ? parts : [marked.trim()].filter(Boolean);
+}
+
+/** Flow edited text into a pdf-lib page, preserving the original page size. */
+function drawPage(pdfDoc: PDFDocument, width: number, height: number, text: string): void {
+  const page = pdfDoc.addPage([width, height]);
+  const size = 11;
+  const lineHeight = size * 1.4;
+  const marginX = 50;
+  let y = height - 50;
+  for (const rawLine of text.split(/\n+/)) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    if (y < 40) break; // keep within the page bounds
+    page.drawText(line, {
+      x: marginX,
+      y,
+      size,
+      color: rgb(0.15, 0.15, 0.15),
+    });
+    y -= lineHeight;
+  }
+}
+
+async function applyAiEdit(buffer: Buffer, prompt: string): Promise<Buffer> {
+  // Extract text per page so we can preserve page structure/layout.
+  let pages: PageText[] = [];
+  try {
+    pages = await extractPages(buffer);
+  } catch {
+    pages = [];
+  }
+
+  // Fallback: no extractable text — just annotate the prompt on a blank page.
+  if (pages.length === 0) {
+    const pdf = await PDFDocument.create();
+    drawPage(pdf, 595.28, 841.89, `(${prompt})\n\nNo extractable text found in this PDF.`);
+    return Buffer.from(await pdf.save());
+  }
+
+  const marked = pages
+    .map((p, idx) => `===PAGE ${idx + 1}===\n${p.text}`)
+    .join('\n\n');
+
+  let editedPages: string[] = [];
+  try {
+    const edited = await generateWithGemini(
+      `You are a document editor. Edit the document below according to this instruction: "${prompt}".\n` +
+        `Keep the ===PAGE N=== markers exactly and return the SAME number of pages.\n` +
+        `Return ONLY the marked document.\n\nDOCUMENT:\n${marked}`,
+    );
+    editedPages = splitIntoPages(edited);
+  } catch {
+    // Editing unavailable: return the original text, annotated with the request.
+    editedPages = pages.map((p) => `(${prompt})\n\n${p.text}`);
+  }
+
+  // Guard against page-count drift from the model.
+  if (editedPages.length !== pages.length) {
+    editedPages = pages.map((p, idx) => editedPages[idx] ?? p.text);
+  }
+
+  const pdf = await PDFDocument.create();
+  pages.forEach((p, idx) => drawPage(pdf, p.width, p.height, editedPages[idx] ?? p.text));
+  return Buffer.from(await pdf.save());
 }
 
 async function applyHeader(buffer: Buffer, headerText: string): Promise<Buffer> {
